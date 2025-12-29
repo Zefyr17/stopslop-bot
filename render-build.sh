@@ -4,7 +4,7 @@
 set -e
 
 echo "Installing dependencies..."
-npm install
+npm install --include=dev
 
 echo "Generating Prisma Client..."
 npm run db:generate

@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction } from 'discord.js';
+import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType } from 'discord.js';
 import { guildConfigService } from './services/GuildConfigService';
 import { postService } from './services/PostService';
 import { voteService } from './services/VoteService';
@@ -68,6 +68,7 @@ bot.on(Events.MessageCreate, async (message) => {
         `Review Channel: ${config.reviewChannelId ? `<#${config.reviewChannelId}>` : 'Not set'}`,
         `Shortlist Channel: ${config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : 'Not set'}`,
         `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
+        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
         `Upvote Threshold: ${config.upvoteThreshold}`,
         `Downvote Threshold: ${config.downvoteThreshold}`,
       ].join('\n');
@@ -211,6 +212,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.guild) return;
 
   const guildId = interaction.guildId!;
+
+  if (interaction.isChatInputCommand()) {
+    await handleSlashCommand(interaction, guildId);
+    return;
+  }
 
   if (interaction.isButton()) {
     const customId = interaction.customId;
@@ -440,5 +446,202 @@ async function handleRatingModalSubmit(interaction: any, guildId: string) {
   } catch (error) {
     console.error('Error processing rating:', error);
     await interaction.reply({ content: 'Failed to save rating.', ephemeral: true });
+  }
+}
+
+async function handleSlashCommand(interaction: ChatInputCommandInteraction, guildId: string) {
+  const { commandName } = interaction;
+
+  try {
+    if (commandName === 'ping') {
+      await interaction.reply('Pong!');
+      return;
+    }
+
+    if (commandName === 'config') {
+      const config = await guildConfigService.getConfig(guildId);
+      if (!config) {
+        await interaction.reply('No config found. Creating default config...');
+        await guildConfigService.getOrCreateConfig(guildId);
+        return;
+      }
+
+      const configInfo = [
+        '**Guild Configuration:**',
+        `Monitored Channels: ${config.monitoredChannelIds.length > 0 ? config.monitoredChannelIds.map((id: string) => `<#${id}>`).join(', ') : 'None'}`,
+        `Review Channel: ${config.reviewChannelId ? `<#${config.reviewChannelId}>` : 'Not set'}`,
+        `Shortlist Channel: ${config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : 'Not set'}`,
+        `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
+        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
+        `Upvote Threshold: ${config.upvoteThreshold}`,
+        `Downvote Threshold: ${config.downvoteThreshold}`,
+      ].join('\n');
+
+      await interaction.reply({ content: configInfo, ephemeral: true });
+      return;
+    }
+
+    if (commandName === 'set-monitored') {
+      const channel1 = interaction.options.getChannel('channel1', true);
+      const channel2 = interaction.options.getChannel('channel2', false);
+      const channel3 = interaction.options.getChannel('channel3', false);
+
+      const channels = [channel1, channel2, channel3].filter(c => c !== null);
+
+      if (!channels.every(c => c?.type === ChannelType.GuildText)) {
+        await interaction.reply({ content: '❌ All channels must be text channels.', ephemeral: true });
+        return;
+      }
+
+      const channelIds = channels.map(c => c!.id);
+      await guildConfigService.setMonitoredChannels(guildId, channelIds);
+
+      await interaction.reply({
+        content: `✅ Monitored channels updated: ${channelIds.map(id => `<#${id}>`).join(', ')}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-review') {
+      const channel = interaction.options.getChannel('channel', true);
+
+      if (channel?.type !== ChannelType.GuildText) {
+        await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+        return;
+      }
+
+      await guildConfigService.getOrCreateConfig(guildId);
+      await guildConfigService.updateConfig(guildId, { reviewChannelId: channel.id });
+
+      await interaction.reply({
+        content: `✅ Review channel set to <#${channel.id}>`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-shortlist') {
+      const channel = interaction.options.getChannel('channel', true);
+
+      if (channel?.type !== ChannelType.GuildText) {
+        await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+        return;
+      }
+
+      await guildConfigService.updateConfig(guildId, { shortlistChannelId: channel.id });
+
+      await interaction.reply({
+        content: `✅ Shortlist channel set to <#${channel.id}>`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-voter-roles') {
+      const role1 = interaction.options.getRole('role1', true);
+      const role2 = interaction.options.getRole('role2', false);
+      const role3 = interaction.options.getRole('role3', false);
+
+      const roles = [role1, role2, role3].filter(r => r !== null);
+      const roleIds = roles.map(r => r!.id);
+
+      await guildConfigService.setVoterRoles(guildId, roleIds);
+
+      await interaction.reply({
+        content: `✅ Voter roles updated: ${roleIds.map(id => `<@&${id}>`).join(', ')}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-judge-roles') {
+      const role1 = interaction.options.getRole('role1', true);
+      const role2 = interaction.options.getRole('role2', false);
+      const role3 = interaction.options.getRole('role3', false);
+
+      const roles = [role1, role2, role3].filter(r => r !== null);
+      const roleIds = roles.map(r => r!.id);
+
+      await guildConfigService.getOrCreateConfig(guildId);
+      await guildConfigService.updateConfig(guildId, { judgeRoleIds: roleIds });
+
+      await interaction.reply({
+        content: `✅ Judge roles updated: ${roleIds.map(id => `<@&${id}>`).join(', ')}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-thresholds') {
+      const upvotes = interaction.options.getInteger('upvotes', true);
+      const downvotes = interaction.options.getInteger('downvotes', true);
+
+      await guildConfigService.setThresholds(guildId, upvotes, downvotes);
+
+      await interaction.reply({
+        content: `✅ Thresholds updated: ${upvotes} upvotes, ${downvotes} downvotes`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'results') {
+      const config = await guildConfigService.getConfig(guildId);
+      if (!config) {
+        await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+        return;
+      }
+
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const hasJudgeRole = config.judgeRoleIds.length === 0 ||
+        config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
+
+      if (!hasJudgeRole) {
+        await interaction.reply({ content: '❌ You do not have permission to view results.', ephemeral: true });
+        return;
+      }
+
+      const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek();
+      const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
+      const weekPosts = shortlistedPosts.filter(p => p.weekId === activeWeek.id);
+
+      if (weekPosts.length === 0) {
+        await interaction.reply({ content: 'No shortlisted posts found for this week.', ephemeral: true });
+        return;
+      }
+
+      const postsWithRatings = await Promise.all(
+        weekPosts.map(async (post) => {
+          const stats = await ratingService.getPostRatingStats(post.id);
+          return {
+            post,
+            stats,
+          };
+        })
+      );
+
+      postsWithRatings.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
+
+      const medals = ['🥇', '🥈', '🥉'];
+      const resultLines = postsWithRatings.map((item, index) => {
+        const medal = medals[index] || `${index + 1}.`;
+        const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'No ratings';
+        const ratingCount = item.stats.totalRatings;
+        return `${medal} **${avgRating} ⭐** (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})\n${item.post.link}\nBy <@${item.post.authorId}>`;
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle('🏆 Weekly Results')
+        .setDescription(resultLines.join('\n\n'))
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+      return;
+    }
+  } catch (error) {
+    console.error(`Error handling command ${commandName}:`, error);
+    await interaction.reply({ content: 'An error occurred while processing your command.', ephemeral: true });
   }
 }

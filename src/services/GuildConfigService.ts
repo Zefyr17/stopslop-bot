@@ -36,6 +36,7 @@ export class GuildConfigService {
       reviewChannelId: string | null;
       shortlistChannelId: string | null;
       voterRoleIds: string[];
+      judgeRoleIds: string[];
       upvoteThreshold: number;
       downvoteThreshold: number;
     }>
@@ -60,6 +61,10 @@ export class GuildConfigService {
 
   async setVoterRoles(guildId: string, roleIds: string[]): Promise<GuildConfig> {
     return this.updateConfig(guildId, { voterRoleIds: roleIds });
+  }
+
+  async setJudgeRoles(guildId: string, roleIds: string[]): Promise<GuildConfig> {
+    return this.updateConfig(guildId, { judgeRoleIds: roleIds });
   }
 
   async setThresholds(

@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PostStatus {
+  PENDING
+  REJECTED
+  SHORTLISTED
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  discordId String   @unique
+  votes     Vote[]
+  ratings   Rating[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Week {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id              String     @id @default(cuid())
+  link            String
+  status          PostStatus @default(PENDING)
+  weekId          String
+  authorId        String
+  originalMessage String?
+  reviewMessageId String?
+  week            Week       @relation(fields: [weekId], references: [id])
+  votes           Vote[]
+  ratings         Rating[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  type      VoteType
+  post      Post     @relation(fields: [postId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([postId, userId])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  score     Int
+  post      Post     @relation(fields: [postId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([postId, userId])
+}
+
+model GuildConfig {
+  id                   String   @id @default(cuid())
+  guildId              String   @unique
+  monitoredChannelIds  String[] @default([])
+  reviewChannelId      String?
+  shortlistChannelId   String?
+  voterRoleIds         String[] @default([])
+  judgeRoleIds         String[] @default([])
+  upvoteThreshold      Int      @default(5)
+  downvoteThreshold    Int      @default(5)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}

@@ -65,12 +65,11 @@ bot.on(Events.MessageCreate, async (message) => {
       const configInfo = [
         '**Guild Configuration:**',
         `Monitored Channels: ${config.monitoredChannelIds.length > 0 ? config.monitoredChannelIds.map((id: string) => `<#${id}>`).join(', ') : 'None'}`,
-        `Review Channel: ${config.reviewChannelId ? `<#${config.reviewChannelId}>` : 'Not set'}`,
         `Shortlist Channel: ${config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : 'Not set'}`,
-        `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
-        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
-        `Upvote Threshold: ${config.upvoteThreshold}`,
-        `Downvote Threshold: ${config.downvoteThreshold}`,
+        `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None (everyone can vote)'}`,
+        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None (everyone can judge)'}`,
+        `Not Slop Threshold: ${config.upvoteThreshold}`,
+        `Slop Threshold: ${config.downvoteThreshold}`,
       ].join('\n');
 
       await message.reply(configInfo);
@@ -162,47 +161,27 @@ bot.on(Events.MessageCreate, async (message) => {
 
     console.log(`Created post ${post.id} for link: ${link}`);
 
-    if (!config.reviewChannelId) {
-      console.warn('Review channel not configured. Skipping repost.');
-      return;
-    }
-
-    const reviewChannel = await message.guild.channels.fetch(config.reviewChannelId);
-    if (!reviewChannel || !reviewChannel.isTextBased()) {
-      console.error('Review channel not found or not text-based.');
-      return;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0x0099ff)
-      .setTitle('New Content Submission')
-      .setDescription(link)
-      .addFields(
-        { name: 'Author', value: `<@${message.author.id}>`, inline: true },
-        { name: 'Status', value: 'PENDING', inline: true }
-      )
-      .setTimestamp();
-
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
-      .setLabel('👍 Upvote')
+      .setLabel('Not Slop (0)')
       .setStyle(ButtonStyle.Success);
 
     const downvoteButton = new ButtonBuilder()
       .setCustomId(`downvote_${post.id}`)
-      .setLabel('👎 Downvote')
+      .setLabel('Slop (0)')
       .setStyle(ButtonStyle.Danger);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(upvoteButton, downvoteButton);
 
-    const reviewMessage = await reviewChannel.send({
-      embeds: [embed],
+    const reviewMessage = await message.reply({
+      content: `Is this slop? Cast your vote for <@${message.author.id}>'s content below.`,
       components: [row],
+      allowedMentions: { repliedUser: false },
     });
 
     await postService.updateReviewMessageId(post.id, reviewMessage.id);
 
-    console.log(`Posted to review channel: ${reviewMessage.id}`);
+    console.log(`Added voting buttons to message: ${reviewMessage.id}`);
   } catch (error) {
     console.error('Error processing message:', error);
   }
@@ -282,27 +261,20 @@ bot.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (statusChanged && newStatus) {
-      const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-        .setFields(
-          { name: 'Author', value: `<@${post.authorId}>`, inline: true },
-          { name: 'Status', value: newStatus, inline: true }
-        );
-
       const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`👍 Upvote (${voteCounts.upvotes})`)
+          .setLabel(`Not Slop (${voteCounts.upvotes})`)
           .setStyle(ButtonStyle.Success)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`👎 Downvote (${voteCounts.downvotes})`)
+          .setLabel(`Slop (${voteCounts.downvotes})`)
           .setStyle(ButtonStyle.Danger)
           .setDisabled(true)
       );
 
       await interaction.message.edit({
-        embeds: [updatedEmbed],
         components: [disabledRow],
       });
 
@@ -335,25 +307,25 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       }
 
       await interaction.reply({
-        content: `✅ Vote registered! Status changed to **${newStatus}**\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}`,
+        content: `✅ Vote registered! Status: **${newStatus}**`,
         ephemeral: true,
       });
     } else {
       const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`👍 Upvote (${voteCounts.upvotes})`)
+          .setLabel(`Not Slop (${voteCounts.upvotes})`)
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`👎 Downvote (${voteCounts.downvotes})`)
+          .setLabel(`Slop (${voteCounts.downvotes})`)
           .setStyle(ButtonStyle.Danger)
       );
 
       await interaction.message.edit({ components: [updatedRow] });
 
       await interaction.reply({
-        content: `✅ Vote registered!\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}`,
+        content: `✅ Vote registered!`,
         ephemeral: true,
       });
     }
@@ -469,12 +441,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       const configInfo = [
         '**Guild Configuration:**',
         `Monitored Channels: ${config.monitoredChannelIds.length > 0 ? config.monitoredChannelIds.map((id: string) => `<#${id}>`).join(', ') : 'None'}`,
-        `Review Channel: ${config.reviewChannelId ? `<#${config.reviewChannelId}>` : 'Not set'}`,
         `Shortlist Channel: ${config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : 'Not set'}`,
-        `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
-        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None'}`,
-        `Upvote Threshold: ${config.upvoteThreshold}`,
-        `Downvote Threshold: ${config.downvoteThreshold}`,
+        `Voter Roles: ${config.voterRoleIds.length > 0 ? config.voterRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None (everyone can vote)'}`,
+        `Judge Roles: ${config.judgeRoleIds.length > 0 ? config.judgeRoleIds.map((id: string) => `<@&${id}>`).join(', ') : 'None (everyone can judge)'}`,
+        `Not Slop Threshold: ${config.upvoteThreshold}`,
+        `Slop Threshold: ${config.downvoteThreshold}`,
       ].join('\n');
 
       await interaction.reply({ content: configInfo, ephemeral: true });

@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { Week } from '../generated/prisma';
+import { Week } from '@prisma/client';
 
 export class WeekService {
   async getActiveWeek(): Promise<Week> {

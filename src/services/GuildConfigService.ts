@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { GuildConfig } from '../generated/prisma';
+import { GuildConfig } from '@prisma/client';
 
 export class GuildConfigService {
   async getOrCreateConfig(guildId: string): Promise<GuildConfig> {

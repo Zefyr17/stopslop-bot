@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { Rating } from '../generated/prisma';
+import { Rating } from '@prisma/client';
 
 export interface PostRatingStats {
   postId: string;

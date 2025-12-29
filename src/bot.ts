@@ -4,7 +4,7 @@ import { postService } from './services/PostService';
 import { voteService } from './services/VoteService';
 import { ratingService } from './services/RatingService';
 import { extractFirstLink } from './utils/linkDetector';
-import { VoteType, PostStatus } from './generated/prisma';
+import { VoteType, PostStatus } from '@prisma/client';
 
 export const bot = new Client({
   intents: [

@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { Vote, VoteType } from '../generated/prisma';
+import { Vote, VoteType } from '@prisma/client';
 
 export interface VoteCounts {
   upvotes: number;

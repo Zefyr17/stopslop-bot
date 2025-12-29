@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { Post, PostStatus } from '../generated/prisma';
+import { Post, PostStatus } from '@prisma/client';
 import { weekService } from './WeekService';
 
 export class PostService {

@@ -306,10 +306,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      await interaction.reply({
-        content: `✅ Vote registered! Status: **${newStatus}**`,
-        ephemeral: true,
-      });
+      await interaction.deferUpdate();
     } else {
       const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
@@ -324,10 +321,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
       await interaction.message.edit({ components: [updatedRow] });
 
-      await interaction.reply({
-        content: `✅ Vote registered!`,
-        ephemeral: true,
-      });
+      await interaction.deferUpdate();
     }
     } catch (error) {
       console.error('Error processing vote:', error);

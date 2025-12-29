@@ -3,99 +3,99 @@ import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.
 export const commands = [
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Проверка работы бота'),
+    .setDescription('Check if the bot is working'),
 
   new SlashCommandBuilder()
     .setName('config')
-    .setDescription('Показать текущую конфигурацию сервера'),
+    .setDescription('Show current server configuration'),
 
   new SlashCommandBuilder()
     .setName('set-monitored')
-    .setDescription('Установить каналы для отслеживания ссылок')
+    .setDescription('Set channels to monitor for links')
     .addChannelOption(option =>
       option.setName('channel1')
-        .setDescription('Первый канал')
+        .setDescription('First channel')
         .setRequired(true))
     .addChannelOption(option =>
       option.setName('channel2')
-        .setDescription('Второй канал')
+        .setDescription('Second channel')
         .setRequired(false))
     .addChannelOption(option =>
       option.setName('channel3')
-        .setDescription('Третий канал')
+        .setDescription('Third channel')
         .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('set-review')
-    .setDescription('Установить канал для голосования')
+    .setDescription('Set the review channel for voting')
     .addChannelOption(option =>
       option.setName('channel')
-        .setDescription('Канал для голосования')
+        .setDescription('Review channel')
         .setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('set-shortlist')
-    .setDescription('Установить канал для финалистов')
+    .setDescription('Set the shortlist channel for finalists')
     .addChannelOption(option =>
       option.setName('channel')
-        .setDescription('Канал для финалистов')
+        .setDescription('Shortlist channel')
         .setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('set-voter-roles')
-    .setDescription('Установить роли для голосующих')
+    .setDescription('Set roles allowed to vote')
     .addRoleOption(option =>
       option.setName('role1')
-        .setDescription('Первая роль')
+        .setDescription('First role')
         .setRequired(true))
     .addRoleOption(option =>
       option.setName('role2')
-        .setDescription('Вторая роль')
+        .setDescription('Second role')
         .setRequired(false))
     .addRoleOption(option =>
       option.setName('role3')
-        .setDescription('Третья роль')
+        .setDescription('Third role')
         .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('set-judge-roles')
-    .setDescription('Установить роли для судей')
+    .setDescription('Set roles allowed to judge')
     .addRoleOption(option =>
       option.setName('role1')
-        .setDescription('Первая роль')
+        .setDescription('First role')
         .setRequired(true))
     .addRoleOption(option =>
       option.setName('role2')
-        .setDescription('Вторая роль')
+        .setDescription('Second role')
         .setRequired(false))
     .addRoleOption(option =>
       option.setName('role3')
-        .setDescription('Третья роль')
+        .setDescription('Third role')
         .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('set-thresholds')
-    .setDescription('Установить пороги голосов')
+    .setDescription('Set voting thresholds')
     .addIntegerOption(option =>
       option.setName('upvotes')
-        .setDescription('Количество апвотов для попадания в шортлист')
+        .setDescription('Number of upvotes needed to shortlist')
         .setRequired(true)
         .setMinValue(1))
     .addIntegerOption(option =>
       option.setName('downvotes')
-        .setDescription('Количество даунвотов для отклонения')
+        .setDescription('Number of downvotes needed to reject')
         .setRequired(true)
         .setMinValue(1))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('results')
-    .setDescription('Показать результаты недели (только для судей)'),
+    .setDescription('Show weekly results (judges only)'),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

@@ -414,19 +414,19 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
           // Create star rating buttons (1-10)
           const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`rate_${post.id}_1`).setLabel('1⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_2`).setLabel('2⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_3`).setLabel('3⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_4`).setLabel('4⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_5`).setLabel('5⭐').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`rate_${post.id}_1`).setLabel('1⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_2`).setLabel('2⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_3`).setLabel('3⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_4`).setLabel('4⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_5`).setLabel('5⭐').setStyle(ButtonStyle.Primary)
           );
 
           const rateRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`rate_${post.id}_6`).setLabel('6⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_7`).setLabel('7⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_8`).setLabel('8⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_9`).setLabel('9⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('10⭐').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`rate_${post.id}_6`).setLabel('6⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_7`).setLabel('7⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_8`).setLabel('8⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_9`).setLabel('9⭐').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
           );
 
           await shortlistChannel.send({
@@ -908,19 +908,19 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
               // Create star rating buttons (1-10)
               const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId(`rate_${postId}_1`).setLabel('1⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_2`).setLabel('2⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_3`).setLabel('3⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_4`).setLabel('4⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_5`).setLabel('5⭐').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`rate_${postId}_1`).setLabel('1⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_2`).setLabel('2⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_3`).setLabel('3⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_4`).setLabel('4⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_5`).setLabel('5⭐').setStyle(ButtonStyle.Primary)
               );
 
               const rateRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId(`rate_${postId}_6`).setLabel('6⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_7`).setLabel('7⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_8`).setLabel('8⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_9`).setLabel('9⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`rate_${postId}_10`).setLabel('10⭐').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId(`rate_${postId}_6`).setLabel('6⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_7`).setLabel('7⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_8`).setLabel('8⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_9`).setLabel('9⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
               );
 
               await shortlistChannel.send({

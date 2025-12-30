@@ -7,7 +7,35 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('config')
-    .setDescription('Show current server configuration'),
+    .setDescription('View or configure server settings')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('show')
+        .setDescription('Show current server configuration'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set-mod-log')
+        .setDescription('Set the mod log channel (Admin only)')
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel for mod logs')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set-admin-roles')
+        .setDescription('Set admin roles for override commands (Admin only)')
+        .addRoleOption(option =>
+          option.setName('role1')
+            .setDescription('First admin role')
+            .setRequired(true))
+        .addRoleOption(option =>
+          option.setName('role2')
+            .setDescription('Second admin role')
+            .setRequired(false))
+        .addRoleOption(option =>
+          option.setName('role3')
+            .setDescription('Third admin role')
+            .setRequired(false))),
 
   new SlashCommandBuilder()
     .setName('set-monitored')
@@ -96,6 +124,53 @@ export const commands = [
   new SlashCommandBuilder()
     .setName('results')
     .setDescription('Show weekly results (judges only)'),
+
+  new SlashCommandBuilder()
+    .setName('post')
+    .setDescription('Admin post management commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('approve')
+        .setDescription('Manually approve a post (Admin only)')
+        .addStringOption(option =>
+          option.setName('postid')
+            .setDescription('The post ID to approve')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reject')
+        .setDescription('Manually reject a post (Admin only)')
+        .addStringOption(option =>
+          option.setName('postid')
+            .setDescription('The post ID to reject')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reset_votes')
+        .setDescription('Reset all votes for a post (Admin only)')
+        .addStringOption(option =>
+          option.setName('postid')
+            .setDescription('The post ID to reset')
+            .setRequired(true)))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('week')
+    .setDescription('Week management commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('close')
+        .setDescription('Close current week and start a new one (Admin only)'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('export')
+    .setDescription('Export commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('results')
+        .setDescription('Export results of the last closed week as CSV (Admin only)'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

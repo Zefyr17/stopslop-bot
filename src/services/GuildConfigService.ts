@@ -35,8 +35,10 @@ export class GuildConfigService {
       monitoredChannelIds: string[];
       reviewChannelId: string | null;
       shortlistChannelId: string | null;
+      modLogChannelId: string | null;
       voterRoleIds: string[];
       judgeRoleIds: string[];
+      adminRoleIds: string[];
       upvoteThreshold: number;
       downvoteThreshold: number;
     }>
@@ -76,6 +78,25 @@ export class GuildConfigService {
       upvoteThreshold: upvote,
       downvoteThreshold: downvote,
     });
+  }
+
+  async setModLogChannel(guildId: string, channelId: string | null): Promise<GuildConfig> {
+    return this.updateConfig(guildId, { modLogChannelId: channelId });
+  }
+
+  async setAdminRoles(guildId: string, roleIds: string[]): Promise<GuildConfig> {
+    return this.updateConfig(guildId, { adminRoleIds: roleIds });
+  }
+
+  async isUserAdmin(guildId: string, userRoleIds: string[]): Promise<boolean> {
+    const config = await this.getConfig(guildId);
+    if (!config) return false;
+
+    if (config.adminRoleIds.length === 0) {
+      return false;
+    }
+
+    return config.adminRoleIds.some((roleId: string) => userRoleIds.includes(roleId));
   }
 }
 

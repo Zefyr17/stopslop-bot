@@ -70,6 +70,13 @@ export class VoteService {
       },
     });
   }
+
+  async deleteAllVotesForPost(postId: string): Promise<number> {
+    const result = await prisma.vote.deleteMany({
+      where: { postId },
+    });
+    return result.count;
+  }
 }
 
 export const voteService = new VoteService();

@@ -23,6 +23,11 @@ enum VoteType {
   DOWN
 }
 
+enum WeekStatus {
+  ACTIVE
+  CLOSED
+}
+
 model User {
   id        String   @id @default(cuid())
   discordId String   @unique
@@ -33,17 +38,19 @@ model User {
 }
 
 model Week {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   startDate DateTime
   endDate   DateTime
+  status    WeekStatus @default(ACTIVE)
   posts     Post[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model Post {
   id              String     @id @default(cuid())
   link            String
+  linkHash        String     @unique
   status          PostStatus @default(PENDING)
   weekId          String
   authorId        String
@@ -88,8 +95,10 @@ model GuildConfig {
   monitoredChannelIds  String[] @default([])
   reviewChannelId      String?
   shortlistChannelId   String?
+  modLogChannelId      String?
   voterRoleIds         String[] @default([])
   judgeRoleIds         String[] @default([])
+  adminRoleIds         String[] @default([])
   upvoteThreshold      Int      @default(5)
   downvoteThreshold    Int      @default(5)
   createdAt            DateTime @default(now())

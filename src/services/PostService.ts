@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import { Post, PostStatus } from '@prisma/client';
 import { weekService } from './WeekService';
+import { createLinkHash } from '../utils/linkNormalizer';
 
 export class PostService {
   async createPost(data: {
@@ -9,10 +10,12 @@ export class PostService {
     originalMessage?: string;
   }): Promise<Post> {
     const activeWeek = await weekService.getActiveWeek();
+    const linkHash = createLinkHash(data.link);
 
     return prisma.post.create({
       data: {
         link: data.link,
+        linkHash,
         authorId: data.authorId,
         originalMessage: data.originalMessage,
         weekId: activeWeek.id,
@@ -74,6 +77,18 @@ export class PostService {
         ratings: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Find duplicate post using atomic linkHash lookup
+   * This is race-condition safe thanks to unique constraint
+   */
+  async findDuplicatePost(link: string): Promise<Post | null> {
+    const linkHash = createLinkHash(link);
+
+    return prisma.post.findUnique({
+      where: { linkHash },
     });
   }
 }

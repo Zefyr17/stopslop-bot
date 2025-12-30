@@ -19,6 +19,30 @@ export class VoteService {
       });
     }
 
+    // Check if user already voted
+    const existingVote = await prisma.vote.findUnique({
+      where: {
+        postId_userId: {
+          postId,
+          userId: dbUser.id,
+        },
+      },
+    });
+
+    if (existingVote) {
+      // Update existing vote
+      return prisma.vote.update({
+        where: {
+          postId_userId: {
+            postId,
+            userId: dbUser.id,
+          },
+        },
+        data: { type },
+      });
+    }
+
+    // Create new vote
     return prisma.vote.create({
       data: {
         postId,
@@ -54,6 +78,37 @@ export class VoteService {
     });
 
     return !!vote;
+  }
+
+  async canUserChangeVote(postId: string, discordUserId: string, cooldownSeconds: number = 20): Promise<{ canChange: boolean; secondsRemaining?: number }> {
+    const user = await prisma.user.findUnique({
+      where: { discordId: discordUserId },
+    });
+
+    if (!user) return { canChange: true };
+
+    const vote = await prisma.vote.findUnique({
+      where: {
+        postId_userId: {
+          postId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!vote) return { canChange: true };
+
+    const now = new Date();
+    const timeSinceLastChange = (now.getTime() - vote.updatedAt.getTime()) / 1000;
+
+    if (timeSinceLastChange < cooldownSeconds) {
+      return {
+        canChange: false,
+        secondsRemaining: Math.ceil(cooldownSeconds - timeSinceLastChange),
+      };
+    }
+
+    return { canChange: true };
   }
 
   async getUserVote(postId: string, discordUserId: string): Promise<Vote | null> {

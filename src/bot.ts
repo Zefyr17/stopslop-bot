@@ -344,10 +344,6 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
     const voteType = customId.startsWith('upvote_') ? VoteType.UP : VoteType.DOWN;
 
-    // Get previous vote to check if it's a change
-    const previousVote = await voteService.getUserVote(post.id, interaction.user.id);
-    const isVoteChange = previousVote && previousVote.type !== voteType;
-
     await voteService.recordVote(post.id, interaction.user.id, voteType);
 
     const voteCounts = await voteService.getVoteCounts(post.id);
@@ -455,15 +451,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       );
 
       await interaction.message.edit({ components: [updatedRow] });
-
-      if (isVoteChange) {
-        await interaction.reply({
-          content: `✅ Vote changed to ${voteType === VoteType.UP ? '👍 Not Slop' : '👎 Slop'}`,
-          ephemeral: true
-        });
-      } else {
-        await interaction.deferUpdate();
-      }
+      await interaction.deferUpdate();
     }
     } catch (error) {
       console.error('Error processing vote:', error);

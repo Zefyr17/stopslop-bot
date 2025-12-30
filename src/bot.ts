@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder } from 'discord.js';
 import { guildConfigService } from './services/GuildConfigService';
 import { postService } from './services/PostService';
 import { voteService } from './services/VoteService';
@@ -232,33 +232,13 @@ bot.on(Events.MessageCreate, async (message) => {
       // Send DM to user
       try {
         await message.author.send(
-          `Your message in **${message.guild?.name}** was deleted because this link was already posted.\n\n` +
-          `Original link: ${duplicatePost.link}\n` +
-          `Posted on: <t:${Math.floor(duplicatePost.createdAt.getTime() / 1000)}:F>`
+          `Your message in **${message.guild?.name}** was deleted because it contained a link that was already posted.`
         );
       } catch (dmError) {
         console.log(`Could not DM user ${message.author.tag} about duplicate link (DMs might be closed)`);
       }
 
-      // Send auto-deleting channel notification
-      try {
-        const notificationMsg = await message.channel.send(
-          `<@${message.author.id}> Duplicate link detected. Message removed.`
-        );
-        setTimeout(() => {
-          notificationMsg.delete().catch(() => {});
-        }, 5000);
-      } catch (error) {
-        console.error('Failed to send duplicate notification:', error);
-      }
-
-      // Log to mod_log_channel
-      await modLogService.log(guildId, ModLogEventType.DUPLICATE_LINK_DELETED, {
-        postId: duplicatePost.id,
-        postLink: link,
-        authorId: message.author.id,
-        details: `User <@${message.author.id}> attempted to post a duplicate link. Original post created <t:${Math.floor(duplicatePost.createdAt.getTime() / 1000)}:R> by <@${duplicatePost.authorId}>.`,
-      });
+      // Note: We don't log duplicates to mod_log or send channel notifications to avoid spam
 
       return;
     }
@@ -372,22 +352,28 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       newStatus = PostStatus.REJECTED;
       statusChanged = true;
 
+      const votersList = await voteService.getAllVotesWithUsers(post.id);
+
       await modLogService.log(guildId, ModLogEventType.POST_REJECTED_AUTO, {
         postId: post.id,
         postLink: post.link,
         authorId: post.authorId,
         votes: voteCounts,
+        votersList,
       });
     } else if (voteCounts.upvotes >= config.upvoteThreshold) {
       await postService.updateStatus(post.id, PostStatus.SHORTLISTED);
       newStatus = PostStatus.SHORTLISTED;
       statusChanged = true;
 
+      const votersList = await voteService.getAllVotesWithUsers(post.id);
+
       await modLogService.log(guildId, ModLogEventType.POST_SHORTLISTED_AUTO, {
         postId: post.id,
         postLink: post.link,
         authorId: post.authorId,
         votes: voteCounts,
+        votersList,
       });
     }
 
@@ -422,16 +408,26 @@ bot.on(Events.InteractionCreate, async (interaction) => {
             )
             .setTimestamp();
 
-          const rateButton = new ButtonBuilder()
-            .setCustomId(`rate_${post.id}`)
-            .setLabel('⭐ Rate (1-10)')
-            .setStyle(ButtonStyle.Primary);
+          // Create star rating buttons (1-10)
+          const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`rate_${post.id}_1`).setLabel('⭐ 1').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_2`).setLabel('⭐ 2').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_3`).setLabel('⭐ 3').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_4`).setLabel('⭐ 4').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_5`).setLabel('⭐ 5').setStyle(ButtonStyle.Secondary)
+          );
 
-          const rateRow = new ActionRowBuilder<ButtonBuilder>().addComponents(rateButton);
+          const rateRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`rate_${post.id}_6`).setLabel('⭐ 6').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_7`).setLabel('⭐ 7').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_8`).setLabel('⭐ 8').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_9`).setLabel('⭐ 9').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('⭐ 10').setStyle(ButtonStyle.Secondary)
+          );
 
           await shortlistChannel.send({
             embeds: [shortlistEmbed],
-            components: [rateRow]
+            components: [rateRow1, rateRow2]
           });
           console.log(`Posted to shortlist channel: ${post.id}`);
         }
@@ -460,11 +456,6 @@ bot.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  if (interaction.isModalSubmit()) {
-    if (interaction.customId.startsWith('rating_modal_')) {
-      await handleRatingModalSubmit(interaction, guildId);
-    }
-  }
 });
 
 async function handleRateButton(interaction: ButtonInteraction, guildId: string) {
@@ -484,7 +475,21 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
-    const postId = interaction.customId.replace('rate_', '');
+    // Extract postId and rating from customId: rate_POSTID_RATING
+    const parts = interaction.customId.split('_');
+    if (parts.length < 3) {
+      await interaction.reply({ content: '❌ Invalid button format.', ephemeral: true });
+      return;
+    }
+
+    const rating = parseInt(parts[parts.length - 1], 10);
+    const postId = parts.slice(1, -1).join('_'); // Handle post IDs that might contain underscores
+
+    if (isNaN(rating) || rating < 1 || rating > 10) {
+      await interaction.reply({ content: '❌ Invalid rating value.', ephemeral: true });
+      return;
+    }
+
     const post = await postService.getPostById(postId);
 
     if (!post) {
@@ -504,57 +509,13 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
-    const modal = new ModalBuilder()
-      .setCustomId(`rating_modal_${postId}`)
-      .setTitle('Rate Content (1-10)');
-
-    const ratingInput = new TextInputBuilder()
-      .setCustomId('rating_score')
-      .setLabel('Enter your rating (1-10)')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('1-10')
-      .setRequired(true)
-      .setMinLength(1)
-      .setMaxLength(2);
-
-    const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(ratingInput);
-    modal.addComponents(actionRow);
-
-    await interaction.showModal(modal);
-  } catch (error) {
-    console.error('Error showing rating modal:', error);
-    await interaction.reply({ content: 'Failed to open rating modal.', ephemeral: true });
-  }
-}
-
-async function handleRatingModalSubmit(interaction: any, guildId: string) {
-  try {
-    const postId = interaction.customId.replace('rating_modal_', '');
-    const ratingInput = interaction.fields.getTextInputValue('rating_score');
-
-    const score = parseInt(ratingInput, 10);
-
-    if (isNaN(score) || score < 1 || score > 10) {
-      await interaction.reply({ content: '❌ Invalid rating. Please enter a number between 1 and 10.', ephemeral: true });
-      return;
-    }
-
-    // Check if the week is closed
-    const post = await postService.getPostById(postId);
-    if (post) {
-      const week = await weekService.getWeekById(post.weekId);
-      if (week && week.status === WeekStatus.CLOSED) {
-        await interaction.reply({ content: '❌ Cannot rate posts from a closed week.', ephemeral: true });
-        return;
-      }
-    }
-
-    await ratingService.upsertRating(postId, interaction.user.id, score);
+    // Save the rating
+    await ratingService.upsertRating(postId, interaction.user.id, rating);
 
     const stats = await ratingService.getPostRatingStats(postId);
 
     await interaction.reply({
-      content: `✅ Rating saved: ${score}/10\nAverage rating: ${stats.averageRating.toFixed(2)} ⭐ (${stats.totalRatings} rating${stats.totalRatings !== 1 ? 's' : ''})`,
+      content: `✅ Rating saved: ${rating}/10\nAverage rating: ${stats.averageRating.toFixed(2)} ⭐ (${stats.totalRatings} rating${stats.totalRatings !== 1 ? 's' : ''})`,
       ephemeral: true,
     });
   } catch (error) {
@@ -893,27 +854,36 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         await postService.updateStatus(postId, PostStatus.SHORTLISTED);
 
-        if (post.reviewMessageId) {
+        // Update review message buttons if it exists
+        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
           try {
-            const reviewChannel = await interaction.guild!.channels.fetch(interaction.channelId);
-            if (reviewChannel?.isTextBased()) {
-              const reviewMessage = await reviewChannel.messages.fetch(post.reviewMessageId);
-              const voteCounts = await voteService.getVoteCounts(postId);
+            const voteCounts = await voteService.getVoteCounts(postId);
+            const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`upvote_${postId}`)
+                .setLabel(`Not Slop (${voteCounts.upvotes})`)
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(true),
+              new ButtonBuilder()
+                .setCustomId(`downvote_${postId}`)
+                .setLabel(`Slop (${voteCounts.downvotes})`)
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(true)
+            );
 
-              const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`upvote_${postId}`)
-                  .setLabel(`Not Slop (${voteCounts.upvotes})`)
-                  .setStyle(ButtonStyle.Success)
-                  .setDisabled(true),
-                new ButtonBuilder()
-                  .setCustomId(`downvote_${postId}`)
-                  .setLabel(`Slop (${voteCounts.downvotes})`)
-                  .setStyle(ButtonStyle.Danger)
-                  .setDisabled(true)
-              );
-
-              await reviewMessage.edit({ components: [disabledRow] });
+            // Try to find the review message in monitored channels
+            for (const channelId of config.monitoredChannelIds) {
+              try {
+                const channel = await interaction.guild!.channels.fetch(channelId);
+                if (channel?.isTextBased()) {
+                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                  await reviewMessage.edit({ components: [disabledRow] });
+                  break; // Found and updated, exit loop
+                }
+              } catch (err) {
+                // Message not in this channel, try next
+                continue;
+              }
             }
           } catch (error) {
             console.error('Failed to disable buttons:', error);
@@ -935,16 +905,26 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 )
                 .setTimestamp();
 
-              const rateButton = new ButtonBuilder()
-                .setCustomId(`rate_${postId}`)
-                .setLabel('⭐ Rate (1-10)')
-                .setStyle(ButtonStyle.Primary);
+              // Create star rating buttons (1-10)
+              const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`rate_${postId}_1`).setLabel('⭐ 1').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_2`).setLabel('⭐ 2').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_3`).setLabel('⭐ 3').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_4`).setLabel('⭐ 4').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_5`).setLabel('⭐ 5').setStyle(ButtonStyle.Secondary)
+              );
 
-              const rateRow = new ActionRowBuilder<ButtonBuilder>().addComponents(rateButton);
+              const rateRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`rate_${postId}_6`).setLabel('⭐ 6').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_7`).setLabel('⭐ 7').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_8`).setLabel('⭐ 8').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_9`).setLabel('⭐ 9').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`rate_${postId}_10`).setLabel('⭐ 10').setStyle(ButtonStyle.Secondary)
+              );
 
               await shortlistChannel.send({
                 embeds: [shortlistEmbed],
-                components: [rateRow]
+                components: [rateRow1, rateRow2]
               });
             }
           } catch (error) {
@@ -974,27 +954,36 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         await postService.updateStatus(postId, PostStatus.REJECTED);
 
-        if (post.reviewMessageId) {
+        // Update review message buttons if it exists
+        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
           try {
-            const reviewChannel = await interaction.guild!.channels.fetch(interaction.channelId);
-            if (reviewChannel?.isTextBased()) {
-              const reviewMessage = await reviewChannel.messages.fetch(post.reviewMessageId);
-              const voteCounts = await voteService.getVoteCounts(postId);
+            const voteCounts = await voteService.getVoteCounts(postId);
+            const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`upvote_${postId}`)
+                .setLabel(`Not Slop (${voteCounts.upvotes})`)
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(true),
+              new ButtonBuilder()
+                .setCustomId(`downvote_${postId}`)
+                .setLabel(`Slop (${voteCounts.downvotes})`)
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(true)
+            );
 
-              const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`upvote_${postId}`)
-                  .setLabel(`Not Slop (${voteCounts.upvotes})`)
-                  .setStyle(ButtonStyle.Success)
-                  .setDisabled(true),
-                new ButtonBuilder()
-                  .setCustomId(`downvote_${postId}`)
-                  .setLabel(`Slop (${voteCounts.downvotes})`)
-                  .setStyle(ButtonStyle.Danger)
-                  .setDisabled(true)
-              );
-
-              await reviewMessage.edit({ components: [disabledRow] });
+            // Try to find the review message in monitored channels
+            for (const channelId of config.monitoredChannelIds) {
+              try {
+                const channel = await interaction.guild!.channels.fetch(channelId);
+                if (channel?.isTextBased()) {
+                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                  await reviewMessage.edit({ components: [disabledRow] });
+                  break; // Found and updated, exit loop
+                }
+              } catch (err) {
+                // Message not in this channel, try next
+                continue;
+              }
             }
           } catch (error) {
             console.error('Failed to disable buttons:', error);
@@ -1032,24 +1021,33 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const deletedCount = await voteService.deleteAllVotesForPost(postId);
         await postService.updateStatus(postId, PostStatus.PENDING);
 
-        if (post.reviewMessageId) {
+        // Update review message buttons if it exists
+        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
           try {
-            const reviewChannel = await interaction.guild!.channels.fetch(interaction.channelId);
-            if (reviewChannel?.isTextBased()) {
-              const reviewMessage = await reviewChannel.messages.fetch(post.reviewMessageId);
+            const enabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`upvote_${postId}`)
+                .setLabel('Not Slop (0)')
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId(`downvote_${postId}`)
+                .setLabel('Slop (0)')
+                .setStyle(ButtonStyle.Danger)
+            );
 
-              const enabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`upvote_${postId}`)
-                  .setLabel('Not Slop (0)')
-                  .setStyle(ButtonStyle.Success),
-                new ButtonBuilder()
-                  .setCustomId(`downvote_${postId}`)
-                  .setLabel('Slop (0)')
-                  .setStyle(ButtonStyle.Danger)
-              );
-
-              await reviewMessage.edit({ components: [enabledRow] });
+            // Try to find the review message in monitored channels
+            for (const channelId of config.monitoredChannelIds) {
+              try {
+                const channel = await interaction.guild!.channels.fetch(channelId);
+                if (channel?.isTextBased()) {
+                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                  await reviewMessage.edit({ components: [enabledRow] });
+                  break; // Found and updated, exit loop
+                }
+              } catch (err) {
+                // Message not in this channel, try next
+                continue;
+              }
             }
           } catch (error) {
             console.error('Failed to re-enable buttons:', error);

@@ -23,6 +23,7 @@ interface ModLogData {
   oldStatus?: string;
   newStatus?: string;
   votes?: { upvotes: number; downvotes: number };
+  votersList?: Array<{ userId: string; voteType: string }>;
   rating?: number;
   error?: string;
   details?: string;
@@ -72,6 +73,22 @@ export class ModLogService {
         if (data.postLink) {
           embed.addFields({ name: 'Link', value: data.postLink });
         }
+        if (data.votersList && data.votersList.length > 0) {
+          const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);
+          const downvoters = data.votersList.filter(v => v.voteType === 'DOWN').map(v => `<@${v.userId}>`);
+
+          let votersText = '';
+          if (upvoters.length > 0) {
+            votersText += `**👍 Not Slop (${upvoters.length}):** ${upvoters.join(', ')}\n`;
+          }
+          if (downvoters.length > 0) {
+            votersText += `**👎 Slop (${downvoters.length}):** ${downvoters.join(', ')}`;
+          }
+
+          if (votersText) {
+            embed.addFields({ name: 'Details', value: votersText });
+          }
+        }
         break;
 
       case ModLogEventType.POST_SHORTLISTED_AUTO:
@@ -86,6 +103,22 @@ export class ModLogService {
           );
         if (data.postLink) {
           embed.addFields({ name: 'Link', value: data.postLink });
+        }
+        if (data.votersList && data.votersList.length > 0) {
+          const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);
+          const downvoters = data.votersList.filter(v => v.voteType === 'DOWN').map(v => `<@${v.userId}>`);
+
+          let votersText = '';
+          if (upvoters.length > 0) {
+            votersText += `**👍 Not Slop (${upvoters.length}):** ${upvoters.join(', ')}\n`;
+          }
+          if (downvoters.length > 0) {
+            votersText += `**👎 Slop (${downvoters.length}):** ${downvoters.join(', ')}`;
+          }
+
+          if (votersText) {
+            embed.addFields({ name: 'Details', value: votersText });
+          }
         }
         break;
 

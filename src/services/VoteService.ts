@@ -77,6 +77,20 @@ export class VoteService {
     });
     return result.count;
   }
+
+  async getAllVotesWithUsers(postId: string): Promise<Array<{ userId: string; voteType: string }>> {
+    const votes = await prisma.vote.findMany({
+      where: { postId },
+      include: {
+        user: true,
+      },
+    });
+
+    return votes.map(vote => ({
+      userId: vote.user.discordId,
+      voteType: vote.type,
+    }));
+  }
 }
 
 export const voteService = new VoteService();

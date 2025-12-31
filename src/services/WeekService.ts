@@ -76,22 +76,32 @@ export class WeekService {
 
     const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
 
-    // First, update the startDate to avoid unique constraint when creating new week
-    // Move it 1 second earlier
-    const updatedWeek = await prisma.week.update({
+    // Close the week
+    const closedWeek = await prisma.week.update({
       where: { id: activeWeek.id },
-      data: {
-        startDate: new Date(activeWeek.startDate.getTime() - 1000),
-        status: WeekStatus.CLOSED
-      },
+      data: { status: WeekStatus.CLOSED },
     });
 
     console.log(`Closed week${channelInfo}: ${activeWeek.id}`);
 
-    // Create new active week for the same channel
-    await this.createNewWeek(monitoredChannelId);
+    // Create new active week starting from the endDate of the closed week
+    const newStartDate = new Date(activeWeek.endDate);
+    newStartDate.setHours(0, 0, 0, 0);
 
-    return updatedWeek;
+    const newEndDate = new Date(newStartDate);
+    newEndDate.setDate(newEndDate.getDate() + 7);
+
+    const newWeek = await prisma.week.create({
+      data: {
+        startDate: newStartDate,
+        endDate: newEndDate,
+        monitoredChannelId: monitoredChannelId || null,
+      },
+    });
+
+    console.log(`Created new week${channelInfo}: ${newWeek.id} (${newStartDate.toISOString()} - ${newEndDate.toISOString()})`);
+
+    return closedWeek;
   }
 
   /**

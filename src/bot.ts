@@ -777,13 +777,23 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       // Get optional monitored channel filter
       const monitoredChannel = interaction.options.getChannel('monitored', false);
 
-      const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek();
+      // Get active week for the specific channel (or global if no channel specified)
+      const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek(monitoredChannel?.id);
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
-      let weekPosts = shortlistedPosts.filter(p => p.weekId === activeWeek.id);
 
-      // Filter by monitored channel if specified
+      // Filter posts by week and channel
+      let weekPosts = shortlistedPosts.filter(p => {
+        // Must be in the active week
+        if (p.weekId !== activeWeek.id) return false;
+
+        // If channel specified, must match
+        if (monitoredChannel && p.monitoredChannelId !== monitoredChannel.id) return false;
+
+        return true;
+      });
+
+      // Check if we have posts
       if (monitoredChannel) {
-        weekPosts = weekPosts.filter(p => p.monitoredChannelId === monitoredChannel.id);
 
         if (weekPosts.length === 0) {
           await interaction.reply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> this week.`, ephemeral: true });

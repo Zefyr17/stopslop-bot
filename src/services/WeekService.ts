@@ -39,15 +39,30 @@ export class WeekService {
     });
 
     if (existingWeek) {
-      // If week exists but is CLOSED, reopen it
+      // If week exists but is CLOSED, we need to update its startDate to avoid conflicts
       if (existingWeek.status === WeekStatus.CLOSED) {
-        console.log(`Reopening existing week${channelInfo}: ${existingWeek.id}`);
-        return prisma.week.update({
+        console.log(`Found existing closed week${channelInfo}, updating to new startDate`);
+
+        // Update the old week's startDate to 1 second earlier to avoid unique constraint
+        await prisma.week.update({
           where: { id: existingWeek.id },
-          data: { status: WeekStatus.ACTIVE },
+          data: {
+            startDate: new Date(startDate.getTime() - 1000) // 1 second earlier
+          },
+        });
+
+        // Now create a fresh new week
+        console.log(`Creating new week${channelInfo}: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+        return prisma.week.create({
+          data: {
+            startDate,
+            endDate,
+            monitoredChannelId: monitoredChannelId || null,
+          },
         });
       }
       // If it's already ACTIVE, just return it
+      console.log(`Returning existing active week${channelInfo}: ${existingWeek.id}`);
       return existingWeek;
     }
 

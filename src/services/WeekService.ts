@@ -30,40 +30,17 @@ export class WeekService {
 
     const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
 
-    // Check if a week with this startDate already exists (might be CLOSED)
-    const existingWeek = await prisma.week.findFirst({
+    // Check if an ACTIVE week already exists for this channel
+    const existingActiveWeek = await prisma.week.findFirst({
       where: {
         monitoredChannelId: monitoredChannelId || null,
-        startDate: startDate,
+        status: WeekStatus.ACTIVE,
       },
     });
 
-    if (existingWeek) {
-      // If week exists but is CLOSED, we need to update its startDate to avoid conflicts
-      if (existingWeek.status === WeekStatus.CLOSED) {
-        console.log(`Found existing closed week${channelInfo}, updating to new startDate`);
-
-        // Update the old week's startDate to 1 second earlier to avoid unique constraint
-        await prisma.week.update({
-          where: { id: existingWeek.id },
-          data: {
-            startDate: new Date(startDate.getTime() - 1000) // 1 second earlier
-          },
-        });
-
-        // Now create a fresh new week
-        console.log(`Creating new week${channelInfo}: ${startDate.toISOString()} - ${endDate.toISOString()}`);
-        return prisma.week.create({
-          data: {
-            startDate,
-            endDate,
-            monitoredChannelId: monitoredChannelId || null,
-          },
-        });
-      }
-      // If it's already ACTIVE, just return it
-      console.log(`Returning existing active week${channelInfo}: ${existingWeek.id}`);
-      return existingWeek;
+    if (existingActiveWeek) {
+      console.log(`Returning existing active week${channelInfo}: ${existingActiveWeek.id}`);
+      return existingActiveWeek;
     }
 
     // Create new week if none exists
@@ -97,15 +74,24 @@ export class WeekService {
   async closeActiveWeek(monitoredChannelId?: string): Promise<Week> {
     const activeWeek = await this.getActiveWeek(monitoredChannelId);
 
-    const closedWeek = await prisma.week.update({
+    const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
+
+    // First, update the startDate to avoid unique constraint when creating new week
+    // Move it 1 second earlier
+    const updatedWeek = await prisma.week.update({
       where: { id: activeWeek.id },
-      data: { status: WeekStatus.CLOSED },
+      data: {
+        startDate: new Date(activeWeek.startDate.getTime() - 1000),
+        status: WeekStatus.CLOSED
+      },
     });
+
+    console.log(`Closed week${channelInfo}: ${activeWeek.id}`);
 
     // Create new active week for the same channel
     await this.createNewWeek(monitoredChannelId);
 
-    return closedWeek;
+    return updatedWeek;
   }
 
   /**

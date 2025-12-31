@@ -154,14 +154,22 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('week')
-    .setDescription('Week management commands')
+    .setDescription('Voting period management commands')
     .addSubcommand(subcommand =>
       subcommand
         .setName('close')
-        .setDescription('Close current week and start a new one (Admin only)')
+        .setDescription('Close current voting period and stop accepting posts (Admin only)')
         .addChannelOption(option =>
           option.setName('monitored')
-            .setDescription('Monitored channel to close week for (optional - closes all if not specified)')
+            .setDescription('Monitored channel to close period for (optional - closes all if not specified)')
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('start')
+        .setDescription('Start a new voting period and begin accepting posts (Admin only)')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Monitored channel to start period for (optional - starts for all if not specified)')
             .setRequired(false)))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 

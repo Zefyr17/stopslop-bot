@@ -140,6 +140,10 @@ bot.on(Events.MessageCreate, async (message) => {
       }
 
       const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek();
+      if (!activeWeek) {
+        await message.reply('No active voting period. Use `/week start` to begin accepting posts.');
+        return;
+      }
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
       const weekPosts = shortlistedPosts.filter(p => p.weekId === activeWeek.id);
 
@@ -245,6 +249,15 @@ bot.on(Events.MessageCreate, async (message) => {
       monitoredChannelId: message.channelId,
       originalMessage: message.content,
     });
+
+    // If no active voting period, notify user
+    if (!post) {
+      await message.reply({
+        content: '🛑 **No active voting period.** An admin needs to start a new voting period with `/week start` before posts can be submitted.',
+        allowedMentions: { repliedUser: false },
+      });
+      return;
+    }
 
     console.log(`Created post ${post.id} for link: ${link}`);
     console.log(`Post created in week ${post.weekId} for channel ${message.channelId}`);
@@ -779,6 +792,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       // Get active week for the specific channel (or global if no channel specified)
       const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek(monitoredChannel?.id);
+      if (!activeWeek) {
+        await interaction.reply({ content: 'No active voting period. Use `/week start` to begin accepting posts.', ephemeral: true });
+        return;
+      }
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
 
       // Filter posts by week and channel
@@ -1124,6 +1141,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           // Get active week for this channel (or global if no channel specified)
           const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
+          if (!activeWeek) {
+            await interaction.reply({ content: 'No active voting period to close.', ephemeral: true });
+            return;
+          }
           const allPosts = await postService.getPostsByWeek(activeWeek.id);
 
           // Close the week
@@ -1143,11 +1164,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             postsCount: allPosts.length,
             weekDates: `${startDate} to ${endDate}`,
             monitoredChannelId: monitoredChannelId,
-            details: `Week closed${channelInfoLog} by <@${interaction.user.id}>. A new active week has been created.`,
+            details: `Voting period closed${channelInfoLog} by <@${interaction.user.id}>. Bot will no longer accept posts until /week start is used.`,
           });
 
           await interaction.reply({
-            content: `✅ Week closed successfully${channelInfo}.\n\n**Closed Week:** ${startDate} to ${endDate}\n**Total Posts:** ${allPosts.length}\n\nA new active week has been created.`,
+            content: `✅ **Voting period closed successfully**${channelInfo}\n\n**Period:** ${startDate} to ${endDate}\n**Total Posts:** ${allPosts.length}\n\n🛑 **Bot will no longer accept new posts${channelInfo}.**\nUse \`/week start\` to begin a new voting period.`,
             ephemeral: true,
           });
         } catch (error) {
@@ -1157,6 +1178,64 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: error instanceof Error ? error.message : 'Unknown error',
           });
           await interaction.reply({ content: '❌ Failed to close week. Check mod log for details.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'start') {
+        try {
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const userRoleIds = Array.from(member.roles.cache.keys());
+
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+          if (!isAdmin) {
+            await interaction.reply({ content: '❌ You do not have permission to start voting periods. (Admin role required)', ephemeral: true });
+            return;
+          }
+
+          // Get optional monitored channel parameter
+          const monitoredChannel = interaction.options.getChannel('monitored', false);
+          const monitoredChannelId = monitoredChannel?.id;
+
+          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+          const channelInfoLog = monitoredChannel ? ` for channel <#${monitoredChannel.id}>` : ' (all channels)';
+
+          // Start new voting period
+          const newWeek = await weekService.startNewWeek(monitoredChannelId);
+
+          // Format dates for logging
+          const startDate = newWeek.startDate.toISOString().split('T')[0];
+          const endDate = newWeek.endDate.toISOString().split('T')[0];
+
+          // Log to mod_log
+          await modLogService.log(guildId, ModLogEventType.WEEK_CLOSED, {
+            weekId: newWeek.id,
+            adminId: interaction.user.id,
+            postsCount: 0,
+            weekDates: `${startDate} to ${endDate}`,
+            monitoredChannelId: monitoredChannelId,
+            details: `New voting period started${channelInfoLog} by <@${interaction.user.id}>. Bot is now accepting posts.`,
+          });
+
+          await interaction.reply({
+            content: `✅ **New voting period started!**${channelInfo}\n\n**Started:** ${startDate}\n\n🎉 **Bot is now accepting posts${channelInfo}!**\nUsers can submit links and vote on them.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error starting week:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await modLogService.log(guildId, ModLogEventType.BOT_ERROR, {
+            error: 'Failed to start week',
+            details: errorMessage,
+          });
+          await interaction.reply({ content: `❌ Failed to start voting period: ${errorMessage}`, ephemeral: true });
         }
         return;
       }

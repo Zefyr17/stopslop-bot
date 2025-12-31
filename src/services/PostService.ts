@@ -9,9 +9,16 @@ export class PostService {
     authorId: string;
     monitoredChannelId?: string;
     originalMessage?: string;
-  }): Promise<Post> {
+  }): Promise<Post | null> {
     // Get the active week for this specific channel
     const activeWeek = await weekService.getActiveWeek(data.monitoredChannelId);
+
+    // If no active period, reject the post
+    if (!activeWeek) {
+      console.log(`Rejected post - no active voting period for channel ${data.monitoredChannelId || 'global'}`);
+      return null;
+    }
+
     console.log(`Using active week ${activeWeek.id} (monitoredChannelId: ${activeWeek.monitoredChannelId || 'null'}) for channel ${data.monitoredChannelId || 'null'}`);
     const linkHash = createLinkHash(data.link);
 

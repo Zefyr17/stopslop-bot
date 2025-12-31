@@ -3,9 +3,10 @@ import { Week, WeekStatus } from '@prisma/client';
 
 export class WeekService {
   /**
-   * Gets the current ACTIVE week for a specific channel, creates one if none exists
+   * Gets the current ACTIVE week for a specific channel
+   * Returns null if no active period exists (bot should reject posts)
    */
-  async getActiveWeek(monitoredChannelId?: string): Promise<Week> {
+  async getActiveWeek(monitoredChannelId?: string): Promise<Week | null> {
     const activeWeek = await prisma.week.findFirst({
       where: {
         status: WeekStatus.ACTIVE,
@@ -14,20 +15,25 @@ export class WeekService {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (activeWeek) {
-      return activeWeek;
+    return activeWeek;
+  }
+
+  /**
+   * Gets the current ACTIVE week for a specific channel
+   * Throws error if no active period exists
+   */
+  async getActiveWeekOrThrow(monitoredChannelId?: string): Promise<Week> {
+    const activeWeek = await this.getActiveWeek(monitoredChannelId);
+
+    if (!activeWeek) {
+      const channelInfo = monitoredChannelId ? ` for this channel` : '';
+      throw new Error(`No active voting period${channelInfo}. Use /week start to begin accepting posts.`);
     }
 
-    return this.createNewWeek(monitoredChannelId);
+    return activeWeek;
   }
 
   async createNewWeek(monitoredChannelId?: string): Promise<Week> {
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 7);
-
     const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
 
     // Check if an ACTIVE week already exists for this channel
@@ -39,12 +45,17 @@ export class WeekService {
     });
 
     if (existingActiveWeek) {
-      console.log(`Returning existing active week${channelInfo}: ${existingActiveWeek.id}`);
+      console.log(`Returning existing active period${channelInfo}: ${existingActiveWeek.id}`);
       return existingActiveWeek;
     }
 
-    // Create new week if none exists
-    console.log(`Creating new week${channelInfo}: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+    // Create new voting period (not tied to calendar dates)
+    // Just use current timestamp to ensure uniqueness
+    const now = new Date();
+    const startDate = new Date(now);
+    const endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // +7 days for reference only
+
+    console.log(`Creating new voting period${channelInfo}: ${startDate.toISOString()}`);
 
     return prisma.week.create({
       data: {
@@ -68,40 +79,50 @@ export class WeekService {
   }
 
   /**
-   * Closes the current ACTIVE week for a specific channel and creates a new one
-   * Returns the closed week
+   * Closes the current ACTIVE voting period for a specific channel
+   * Does NOT create a new period - use startNewWeek() for that
+   * Returns the closed period
    */
   async closeActiveWeek(monitoredChannelId?: string): Promise<Week> {
-    const activeWeek = await this.getActiveWeek(monitoredChannelId);
+    const activeWeek = await this.getActiveWeekOrThrow(monitoredChannelId);
 
     const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
 
-    // Close the week
+    // Close the current voting period
     const closedWeek = await prisma.week.update({
       where: { id: activeWeek.id },
-      data: { status: WeekStatus.CLOSED },
-    });
-
-    console.log(`Closed week${channelInfo}: ${activeWeek.id}`);
-
-    // Create new active week starting from the endDate of the closed week
-    const newStartDate = new Date(activeWeek.endDate);
-    newStartDate.setHours(0, 0, 0, 0);
-
-    const newEndDate = new Date(newStartDate);
-    newEndDate.setDate(newEndDate.getDate() + 7);
-
-    const newWeek = await prisma.week.create({
       data: {
-        startDate: newStartDate,
-        endDate: newEndDate,
-        monitoredChannelId: monitoredChannelId || null,
+        status: WeekStatus.CLOSED,
+        endDate: new Date() // Set actual end date to now
       },
     });
 
-    console.log(`Created new week${channelInfo}: ${newWeek.id} (${newStartDate.toISOString()} - ${newEndDate.toISOString()})`);
+    console.log(`Closed voting period${channelInfo}: ${activeWeek.id} - bot will no longer accept posts`);
 
     return closedWeek;
+  }
+
+  /**
+   * Starts a new voting period for a specific channel
+   * Returns the new period
+   */
+  async startNewWeek(monitoredChannelId?: string): Promise<Week> {
+    const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
+
+    // Check if there's already an active period
+    const existingActiveWeek = await prisma.week.findFirst({
+      where: {
+        monitoredChannelId: monitoredChannelId || null,
+        status: WeekStatus.ACTIVE,
+      },
+    });
+
+    if (existingActiveWeek) {
+      throw new Error(`There is already an active voting period${channelInfo}. Close it first with /week close.`);
+    }
+
+    // Create new voting period
+    return this.createNewWeek(monitoredChannelId);
   }
 
   /**

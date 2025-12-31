@@ -158,7 +158,11 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('close')
-        .setDescription('Close current week and start a new one (Admin only)'))
+        .setDescription('Close current week and start a new one (Admin only)')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Monitored channel to close week for (optional - closes all if not specified)')
+            .setRequired(false)))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()

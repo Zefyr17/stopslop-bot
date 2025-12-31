@@ -3,12 +3,13 @@ import { Week, WeekStatus } from '@prisma/client';
 
 export class WeekService {
   /**
-   * Gets the current ACTIVE week, creates one if none exists
+   * Gets the current ACTIVE week for a specific channel, creates one if none exists
    */
-  async getActiveWeek(): Promise<Week> {
+  async getActiveWeek(monitoredChannelId?: string): Promise<Week> {
     const activeWeek = await prisma.week.findFirst({
       where: {
         status: WeekStatus.ACTIVE,
+        monitoredChannelId: monitoredChannelId || null,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -17,22 +18,24 @@ export class WeekService {
       return activeWeek;
     }
 
-    return this.createNewWeek();
+    return this.createNewWeek(monitoredChannelId);
   }
 
-  async createNewWeek(): Promise<Week> {
+  async createNewWeek(monitoredChannelId?: string): Promise<Week> {
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
 
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7);
 
-    console.log(`Creating new week: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+    const channelInfo = monitoredChannelId ? ` for channel ${monitoredChannelId}` : '';
+    console.log(`Creating new week${channelInfo}: ${startDate.toISOString()} - ${endDate.toISOString()}`);
 
     return prisma.week.create({
       data: {
         startDate,
         endDate,
+        monitoredChannelId: monitoredChannelId || null,
       },
     });
   }
@@ -50,29 +53,32 @@ export class WeekService {
   }
 
   /**
-   * Closes the current ACTIVE week and creates a new one
+   * Closes the current ACTIVE week for a specific channel and creates a new one
    * Returns the closed week
    */
-  async closeActiveWeek(): Promise<Week> {
-    const activeWeek = await this.getActiveWeek();
+  async closeActiveWeek(monitoredChannelId?: string): Promise<Week> {
+    const activeWeek = await this.getActiveWeek(monitoredChannelId);
 
     const closedWeek = await prisma.week.update({
       where: { id: activeWeek.id },
       data: { status: WeekStatus.CLOSED },
     });
 
-    // Create new active week
-    await this.createNewWeek();
+    // Create new active week for the same channel
+    await this.createNewWeek(monitoredChannelId);
 
     return closedWeek;
   }
 
   /**
-   * Gets the most recent CLOSED week
+   * Gets the most recent CLOSED week for a specific channel
    */
-  async getLastClosedWeek(): Promise<Week | null> {
+  async getLastClosedWeek(monitoredChannelId?: string): Promise<Week | null> {
     return prisma.week.findFirst({
-      where: { status: WeekStatus.CLOSED },
+      where: {
+        status: WeekStatus.CLOSED,
+        monitoredChannelId: monitoredChannelId || null,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

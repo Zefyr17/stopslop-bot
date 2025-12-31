@@ -1107,16 +1107,23 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             return;
           }
 
-          // Check if there's already a closed week (prevent closing twice)
-          const activeWeek = await weekService.getActiveWeek();
+          // Get optional monitored channel parameter
+          const monitoredChannel = interaction.options.getChannel('monitored', false);
+          const monitoredChannelId = monitoredChannel?.id;
+
+          // Get active week for this channel (or global if no channel specified)
+          const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
           const allPosts = await postService.getPostsByWeek(activeWeek.id);
 
           // Close the week
-          const closedWeek = await weekService.closeActiveWeek();
+          const closedWeek = await weekService.closeActiveWeek(monitoredChannelId);
 
           // Format dates for logging
           const startDate = closedWeek.startDate.toISOString().split('T')[0];
           const endDate = closedWeek.endDate.toISOString().split('T')[0];
+
+          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+          const channelInfoLog = monitoredChannel ? ` for channel <#${monitoredChannel.id}>` : ' (all channels)';
 
           // Log to mod_log
           await modLogService.log(guildId, ModLogEventType.WEEK_CLOSED, {
@@ -1124,11 +1131,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             adminId: interaction.user.id,
             postsCount: allPosts.length,
             weekDates: `${startDate} to ${endDate}`,
-            details: `Week closed by <@${interaction.user.id}>. A new active week has been created.`,
+            monitoredChannelId: monitoredChannelId,
+            details: `Week closed${channelInfoLog} by <@${interaction.user.id}>. A new active week has been created.`,
           });
 
           await interaction.reply({
-            content: `✅ Week closed successfully.\n\n**Closed Week:** ${startDate} to ${endDate}\n**Total Posts:** ${allPosts.length}\n\nA new active week has been created.`,
+            content: `✅ Week closed successfully${channelInfo}.\n\n**Closed Week:** ${startDate} to ${endDate}\n**Total Posts:** ${allPosts.length}\n\nA new active week has been created.`,
             ephemeral: true,
           });
         } catch (error) {

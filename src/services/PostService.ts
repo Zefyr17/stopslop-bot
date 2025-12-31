@@ -10,7 +10,8 @@ export class PostService {
     monitoredChannelId?: string;
     originalMessage?: string;
   }): Promise<Post> {
-    const activeWeek = await weekService.getActiveWeek();
+    // Get the active week for this specific channel
+    const activeWeek = await weekService.getActiveWeek(data.monitoredChannelId);
     const linkHash = createLinkHash(data.link);
 
     return prisma.post.create({

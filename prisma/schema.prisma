@@ -38,13 +38,16 @@ model User {
 }
 
 model Week {
-  id        String     @id @default(cuid())
-  startDate DateTime
-  endDate   DateTime
-  status    WeekStatus @default(ACTIVE)
-  posts     Post[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  monitoredChannelId String?
+  startDate          DateTime
+  endDate            DateTime
+  status             WeekStatus @default(ACTIVE)
+  posts              Post[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@unique([monitoredChannelId, startDate])
 }
 
 model Post {

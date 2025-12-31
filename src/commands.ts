@@ -173,6 +173,11 @@ export const commands = [
         .setName('results')
         .setDescription('Export results of the last closed week as CSV (Admin only)'))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('fix-old-weeks')
+    .setDescription('Close old global active weeks (Admin only - fixes voting buttons issue)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

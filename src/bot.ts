@@ -247,6 +247,7 @@ bot.on(Events.MessageCreate, async (message) => {
     });
 
     console.log(`Created post ${post.id} for link: ${link}`);
+    console.log(`Post created in week ${post.weekId} for channel ${message.channelId}`);
 
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
@@ -1222,6 +1223,80 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
         return;
       }
+    }
+
+    if (commandName === 'fix-old-weeks') {
+      try {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+
+        const config = await guildConfigService.getConfig(guildId);
+        if (!config) {
+          await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+          return;
+        }
+
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+          return;
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const { prisma } = await import('./db');
+
+        // Find all ACTIVE weeks that don't have a monitoredChannelId (old global weeks)
+        const oldGlobalWeeks = await prisma.week.findMany({
+          where: {
+            status: WeekStatus.ACTIVE,
+            monitoredChannelId: null
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (oldGlobalWeeks.length === 0) {
+          await interaction.editReply({
+            content: '✅ No old global active weeks found - everything is already clean!\n\nAll active weeks are properly assigned to channel pairs.',
+          });
+          return;
+        }
+
+        // Close old global weeks
+        const result = await prisma.week.updateMany({
+          where: {
+            status: WeekStatus.ACTIVE,
+            monitoredChannelId: null
+          },
+          data: {
+            status: WeekStatus.CLOSED
+          }
+        });
+
+        // Get current active weeks
+        const activeWeeks = await prisma.week.findMany({
+          where: { status: WeekStatus.ACTIVE },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        const weeksList = activeWeeks.length > 0
+          ? activeWeeks.map((week) => `• Week ${week.id.substring(0, 8)}... for channel <#${week.monitoredChannelId}>`).join('\n')
+          : '*None - weeks will be created automatically when posts are submitted*';
+
+        await modLogService.log(guildId, ModLogEventType.BOT_ERROR, {
+          error: 'Fixed old weeks',
+          details: `Admin <@${interaction.user.id}> closed ${result.count} old global active week(s). Current active weeks: ${activeWeeks.length}`,
+        });
+
+        await interaction.editReply({
+          content: `✅ **Fixed old weeks issue!**\n\n**Closed:** ${result.count} old global active week(s)\n**Current active weeks:** ${activeWeeks.length}\n\n${weeksList}\n\n🎉 Voting buttons should now work correctly in monitored channels!`,
+        });
+      } catch (error) {
+        console.error('Error fixing old weeks:', error);
+        await interaction.editReply({ content: '❌ Failed to fix old weeks. Check logs for details.' });
+      }
+      return;
     }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);

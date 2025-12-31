@@ -19,6 +19,7 @@ interface ModLogData {
   postId?: string;
   postLink?: string;
   authorId?: string;
+  monitoredChannelId?: string;
   adminId?: string;
   oldStatus?: string;
   newStatus?: string;
@@ -70,6 +71,9 @@ export class ModLogService {
             { name: 'Author', value: data.authorId ? `<@${data.authorId}>` : 'Unknown', inline: true },
             { name: 'Votes', value: `👍 ${data.votes?.upvotes || 0} | 👎 ${data.votes?.downvotes || 0}`, inline: true }
           );
+        if (data.monitoredChannelId) {
+          embed.addFields({ name: 'Channel', value: `<#${data.monitoredChannelId}>`, inline: true });
+        }
         if (data.postLink) {
           embed.addFields({ name: 'Link', value: data.postLink });
         }
@@ -79,10 +83,10 @@ export class ModLogService {
 
           let votersText = '';
           if (upvoters.length > 0) {
-            votersText += `**👍 Not Slop (${upvoters.length}):** ${upvoters.join(', ')}\n`;
+            votersText += `**👍 Yes (${upvoters.length}):** ${upvoters.join(', ')}\n`;
           }
           if (downvoters.length > 0) {
-            votersText += `**👎 Slop (${downvoters.length}):** ${downvoters.join(', ')}`;
+            votersText += `**👎 No (${downvoters.length}):** ${downvoters.join(', ')}`;
           }
 
           if (votersText) {
@@ -101,6 +105,9 @@ export class ModLogService {
             { name: 'Author', value: data.authorId ? `<@${data.authorId}>` : 'Unknown', inline: true },
             { name: 'Votes', value: `👍 ${data.votes?.upvotes || 0} | 👎 ${data.votes?.downvotes || 0}`, inline: true }
           );
+        if (data.monitoredChannelId) {
+          embed.addFields({ name: 'Channel', value: `<#${data.monitoredChannelId}>`, inline: true });
+        }
         if (data.postLink) {
           embed.addFields({ name: 'Link', value: data.postLink });
         }
@@ -110,10 +117,10 @@ export class ModLogService {
 
           let votersText = '';
           if (upvoters.length > 0) {
-            votersText += `**👍 Not Slop (${upvoters.length}):** ${upvoters.join(', ')}\n`;
+            votersText += `**👍 Yes (${upvoters.length}):** ${upvoters.join(', ')}\n`;
           }
           if (downvoters.length > 0) {
-            votersText += `**👎 Slop (${downvoters.length}):** ${downvoters.join(', ')}`;
+            votersText += `**👎 No (${downvoters.length}):** ${downvoters.join(', ')}`;
           }
 
           if (votersText) {

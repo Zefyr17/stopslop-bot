@@ -359,6 +359,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         postId: post.id,
         postLink: post.link,
         authorId: post.authorId,
+        monitoredChannelId: post.monitoredChannelId || undefined,
         votes: voteCounts,
         votersList,
       });
@@ -373,6 +374,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         postId: post.id,
         postLink: post.link,
         authorId: post.authorId,
+        monitoredChannelId: post.monitoredChannelId || undefined,
         votes: voteCounts,
         votersList,
       });

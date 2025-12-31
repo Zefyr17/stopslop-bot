@@ -38,38 +38,32 @@ export const commands = [
             .setRequired(false))),
 
   new SlashCommandBuilder()
-    .setName('set-monitored')
-    .setDescription('Set channels to monitor for links')
-    .addChannelOption(option =>
-      option.setName('channel1')
-        .setDescription('First channel')
-        .setRequired(true))
-    .addChannelOption(option =>
-      option.setName('channel2')
-        .setDescription('Second channel')
-        .setRequired(false))
-    .addChannelOption(option =>
-      option.setName('channel3')
-        .setDescription('Third channel')
-        .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-  new SlashCommandBuilder()
-    .setName('set-review')
-    .setDescription('Set the review channel for voting')
-    .addChannelOption(option =>
-      option.setName('channel')
-        .setDescription('Review channel')
-        .setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-  new SlashCommandBuilder()
-    .setName('set-shortlist')
-    .setDescription('Set the shortlist channel for finalists')
-    .addChannelOption(option =>
-      option.setName('channel')
-        .setDescription('Shortlist channel')
-        .setRequired(true))
+    .setName('channel-pair')
+    .setDescription('Manage monitored and shortlist channel pairs')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('add')
+        .setDescription('Add a monitored-shortlist channel pair')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Channel to monitor for content submissions')
+            .setRequired(true))
+        .addChannelOption(option =>
+          option.setName('shortlist')
+            .setDescription('Channel where shortlisted content will be posted')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('remove')
+        .setDescription('Remove a channel pair')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Monitored channel to remove')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('List all channel pairs'))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
@@ -123,7 +117,11 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('results')
-    .setDescription('Show weekly results (judges only)'),
+    .setDescription('Show weekly results (judges only)')
+    .addChannelOption(option =>
+      option.setName('monitored')
+        .setDescription('Filter results by monitored channel (optional)')
+        .setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('post')

@@ -7,6 +7,7 @@ export class PostService {
   async createPost(data: {
     link: string;
     authorId: string;
+    monitoredChannelId?: string;
     originalMessage?: string;
   }): Promise<Post> {
     const activeWeek = await weekService.getActiveWeek();
@@ -17,6 +18,7 @@ export class PostService {
         link: data.link,
         linkHash,
         authorId: data.authorId,
+        monitoredChannelId: data.monitoredChannelId,
         originalMessage: data.originalMessage,
         weekId: activeWeek.id,
         status: PostStatus.PENDING,

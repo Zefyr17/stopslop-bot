@@ -65,27 +65,20 @@ bot.on(Events.MessageCreate, async (message) => {
         return;
       }
 
+      const { channelPairService } = await import('./services/ChannelPairService');
+      const pairs = await channelPairService.getChannelPairs(guildId);
+
       const embed = new EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle('⚙️ Server Configuration')
         .setDescription('Current bot settings for this server')
         .addFields(
           {
-            name: '📢 Monitored Channels',
-            value: config.monitoredChannelIds.length > 0
-              ? config.monitoredChannelIds.map((id: string) => `<#${id}>`).join(', ')
-              : '*None set*',
+            name: '📢 Channel Pairs',
+            value: pairs.length > 0
+              ? pairs.map(pair => `<#${pair.monitoredChannelId}> → <#${pair.shortlistChannelId}>`).join('\n')
+              : '*None set*\nUse `/channel-pair add` to create pairs.',
             inline: false
-          },
-          {
-            name: '📋 Review Channel',
-            value: config.reviewChannelId ? `<#${config.reviewChannelId}>` : '*Not set*',
-            inline: true
-          },
-          {
-            name: '⭐ Shortlist Channel',
-            value: config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : '*Not set*',
-            inline: true
           },
           {
             name: '📝 Mod Log Channel',
@@ -115,7 +108,7 @@ bot.on(Events.MessageCreate, async (message) => {
           },
           {
             name: '📊 Voting Thresholds',
-            value: `👍 Not Slop: **${config.upvoteThreshold}**\n👎 Slop: **${config.downvoteThreshold}**`,
+            value: `👍 Yes: **${config.upvoteThreshold}**\n👎 No: **${config.downvoteThreshold}**`,
             inline: false
           }
         )
@@ -193,7 +186,10 @@ bot.on(Events.MessageCreate, async (message) => {
     const config = await guildConfigService.getConfig(guildId);
     if (!config) return;
 
-    if (!config.monitoredChannelIds.includes(message.channelId)) {
+    // Check if this channel is monitored using channel pairs
+    const { channelPairService } = await import('./services/ChannelPairService');
+    const isMonitored = await channelPairService.isMonitoredChannel(guildId, message.channelId);
+    if (!isMonitored) {
       return;
     }
 
@@ -246,6 +242,7 @@ bot.on(Events.MessageCreate, async (message) => {
     const post = await postService.createPost({
       link,
       authorId: message.author.id,
+      monitoredChannelId: message.channelId,
       originalMessage: message.content,
     });
 
@@ -253,18 +250,18 @@ bot.on(Events.MessageCreate, async (message) => {
 
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
-      .setLabel('Not Slop (0)')
+      .setLabel('Yes (0)')
       .setStyle(ButtonStyle.Success);
 
     const downvoteButton = new ButtonBuilder()
       .setCustomId(`downvote_${post.id}`)
-      .setLabel('Slop (0)')
+      .setLabel('No (0)')
       .setStyle(ButtonStyle.Danger);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(upvoteButton, downvoteButton);
 
     const reviewMessage = await message.reply({
-      content: `Is this slop? Cast your vote for <@${message.author.id}>'s content below.`,
+      content: `Should this post by <@${message.author.id}> make the shortlist for our weekly contest? Cast your vote below.`,
       components: [row],
       allowedMentions: { repliedUser: false },
     });
@@ -385,12 +382,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`Not Slop (${voteCounts.upvotes})`)
+          .setLabel(`Yes (${voteCounts.upvotes})`)
           .setStyle(ButtonStyle.Success)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`Slop (${voteCounts.downvotes})`)
+          .setLabel(`No (${voteCounts.downvotes})`)
           .setStyle(ButtonStyle.Danger)
           .setDisabled(true)
       );
@@ -399,9 +396,14 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         components: [disabledRow],
       });
 
-      if (newStatus === PostStatus.SHORTLISTED && config.shortlistChannelId) {
-        const shortlistChannel = await interaction.guild.channels.fetch(config.shortlistChannelId);
-        if (shortlistChannel?.isTextBased()) {
+      if (newStatus === PostStatus.SHORTLISTED && post.monitoredChannelId) {
+        // Find the shortlist channel for this monitored channel
+        const { channelPairService } = await import('./services/ChannelPairService');
+        const shortlistChannelId = await channelPairService.getShortlistChannelId(guildId, post.monitoredChannelId);
+
+        if (shortlistChannelId) {
+          const shortlistChannel = await interaction.guild.channels.fetch(shortlistChannelId);
+          if (shortlistChannel?.isTextBased()) {
           const shortlistEmbed = new EmbedBuilder()
             .setColor(0x00ff00)
             .setTitle('⭐ Shortlisted Content')
@@ -429,11 +431,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
             new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
           );
 
-          await shortlistChannel.send({
-            embeds: [shortlistEmbed],
-            components: [rateRow1, rateRow2]
-          });
-          console.log(`Posted to shortlist channel: ${post.id}`);
+            await shortlistChannel.send({
+              embeds: [shortlistEmbed],
+              components: [rateRow1, rateRow2]
+            });
+            console.log(`Posted to shortlist channel: ${post.id}`);
+          }
         }
       }
 
@@ -442,11 +445,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`Not Slop (${voteCounts.upvotes})`)
+          .setLabel(`Yes (${voteCounts.upvotes})`)
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`Slop (${voteCounts.downvotes})`)
+          .setLabel(`No (${voteCounts.downvotes})`)
           .setStyle(ButtonStyle.Danger)
       );
 
@@ -545,27 +548,20 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           return;
         }
 
+        const { channelPairService } = await import('./services/ChannelPairService');
+        const pairs = await channelPairService.getChannelPairs(guildId);
+
         const embed = new EmbedBuilder()
           .setColor(0x5865F2)
           .setTitle('⚙️ Server Configuration')
           .setDescription('Current bot settings for this server')
           .addFields(
             {
-              name: '📢 Monitored Channels',
-              value: config.monitoredChannelIds.length > 0
-                ? config.monitoredChannelIds.map((id: string) => `<#${id}>`).join(', ')
-                : '*None set*',
+              name: '📢 Channel Pairs',
+              value: pairs.length > 0
+                ? pairs.map(pair => `<#${pair.monitoredChannelId}> → <#${pair.shortlistChannelId}>`).join('\n')
+                : '*None set*\nUse `/channel-pair add` to create pairs.',
               inline: false
-            },
-            {
-              name: '📋 Review Channel',
-              value: config.reviewChannelId ? `<#${config.reviewChannelId}>` : '*Not set*',
-              inline: true
-            },
-            {
-              name: '⭐ Shortlist Channel',
-              value: config.shortlistChannelId ? `<#${config.shortlistChannelId}>` : '*Not set*',
-              inline: true
             },
             {
               name: '📝 Mod Log Channel',
@@ -595,7 +591,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             },
             {
               name: '📊 Voting Thresholds',
-              value: `👍 Not Slop: **${config.upvoteThreshold}**\n👎 Slop: **${config.downvoteThreshold}**`,
+              value: `👍 Yes: **${config.upvoteThreshold}**\n👎 No: **${config.downvoteThreshold}**`,
               inline: false
             }
           )
@@ -642,61 +638,73 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
     }
 
-    if (commandName === 'set-monitored') {
-      const channel1 = interaction.options.getChannel('channel1', true);
-      const channel2 = interaction.options.getChannel('channel2', false);
-      const channel3 = interaction.options.getChannel('channel3', false);
+    if (commandName === 'channel-pair') {
+      const subcommand = interaction.options.getSubcommand();
+      const { channelPairService } = await import('./services/ChannelPairService');
 
-      const channels = [channel1, channel2, channel3].filter(c => c !== null);
+      if (subcommand === 'add') {
+        const monitoredChannel = interaction.options.getChannel('monitored', true);
+        const shortlistChannel = interaction.options.getChannel('shortlist', true);
 
-      if (!channels.every(c => c?.type === ChannelType.GuildText)) {
-        await interaction.reply({ content: '❌ All channels must be text channels.', ephemeral: true });
+        if (monitoredChannel?.type !== ChannelType.GuildText || shortlistChannel?.type !== ChannelType.GuildText) {
+          await interaction.reply({ content: '❌ Both channels must be text channels.', ephemeral: true });
+          return;
+        }
+
+        try {
+          await channelPairService.addChannelPair(guildId, monitoredChannel.id, shortlistChannel.id);
+          await interaction.reply({
+            content: `✅ Channel pair created:\n📢 Monitored: <#${monitoredChannel.id}>\n⭐ Shortlist: <#${shortlistChannel.id}>`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          await interaction.reply({
+            content: `❌ ${error instanceof Error ? error.message : 'Failed to create channel pair'}`,
+            ephemeral: true,
+          });
+        }
         return;
       }
 
-      const channelIds = channels.map(c => c!.id);
-      await guildConfigService.setMonitoredChannels(guildId, channelIds);
+      if (subcommand === 'remove') {
+        const monitoredChannel = interaction.options.getChannel('monitored', true);
 
-      await interaction.reply({
-        content: `✅ Monitored channels updated: ${channelIds.map(id => `<#${id}>`).join(', ')}`,
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (commandName === 'set-review') {
-      const channel = interaction.options.getChannel('channel', true);
-
-      if (channel?.type !== ChannelType.GuildText) {
-        await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+        try {
+          await channelPairService.removeChannelPair(guildId, monitoredChannel.id);
+          await interaction.reply({
+            content: `✅ Channel pair removed for <#${monitoredChannel.id}>`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          await interaction.reply({
+            content: `❌ ${error instanceof Error ? error.message : 'Failed to remove channel pair'}`,
+            ephemeral: true,
+          });
+        }
         return;
       }
 
-      await guildConfigService.getOrCreateConfig(guildId);
-      await guildConfigService.updateConfig(guildId, { reviewChannelId: channel.id });
+      if (subcommand === 'list') {
+        const pairs = await channelPairService.getChannelPairs(guildId);
 
-      await interaction.reply({
-        content: `✅ Review channel set to <#${channel.id}>`,
-        ephemeral: true,
-      });
-      return;
-    }
+        if (pairs.length === 0) {
+          await interaction.reply({
+            content: '📋 No channel pairs configured.\n\nUse `/channel-pair add` to create a pair.',
+            ephemeral: true,
+          });
+          return;
+        }
 
-    if (commandName === 'set-shortlist') {
-      const channel = interaction.options.getChannel('channel', true);
+        const pairsList = pairs.map(pair =>
+          `📢 <#${pair.monitoredChannelId}> → ⭐ <#${pair.shortlistChannelId}>`
+        ).join('\n');
 
-      if (channel?.type !== ChannelType.GuildText) {
-        await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+        await interaction.reply({
+          content: `📋 **Channel Pairs:**\n\n${pairsList}`,
+          ephemeral: true,
+        });
         return;
       }
-
-      await guildConfigService.updateConfig(guildId, { shortlistChannelId: channel.id });
-
-      await interaction.reply({
-        content: `✅ Shortlist channel set to <#${channel.id}>`,
-        ephemeral: true,
-      });
-      return;
     }
 
     if (commandName === 'set-voter-roles') {
@@ -763,11 +771,22 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
+      // Get optional monitored channel filter
+      const monitoredChannel = interaction.options.getChannel('monitored', false);
+
       const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek();
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
-      const weekPosts = shortlistedPosts.filter(p => p.weekId === activeWeek.id);
+      let weekPosts = shortlistedPosts.filter(p => p.weekId === activeWeek.id);
 
-      if (weekPosts.length === 0) {
+      // Filter by monitored channel if specified
+      if (monitoredChannel) {
+        weekPosts = weekPosts.filter(p => p.monitoredChannelId === monitoredChannel.id);
+
+        if (weekPosts.length === 0) {
+          await interaction.reply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> this week.`, ephemeral: true });
+          return;
+        }
+      } else if (weekPosts.length === 0) {
         await interaction.reply({ content: 'No shortlisted posts found for this week.', ephemeral: true });
         return;
       }
@@ -792,9 +811,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return `${medal} **${avgRating} ⭐** (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})\n${item.post.link}\nBy <@${item.post.authorId}>`;
       });
 
+      const title = monitoredChannel
+        ? `🏆 Weekly Results - <#${monitoredChannel.id}>`
+        : '🏆 Weekly Results - All Channels';
+
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
-        .setTitle('🏆 Weekly Results')
+        .setTitle(title)
         .setDescription(resultLines.join('\n\n'))
         .setTimestamp();
 
@@ -856,44 +879,44 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         await postService.updateStatus(postId, PostStatus.SHORTLISTED);
 
         // Update review message buttons if it exists
-        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
+        if (post.reviewMessageId && post.monitoredChannelId) {
           try {
             const voteCounts = await voteService.getVoteCounts(postId);
             const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel(`Not Slop (${voteCounts.upvotes})`)
+                .setLabel(`Yes (${voteCounts.upvotes})`)
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel(`Slop (${voteCounts.downvotes})`)
+                .setLabel(`No (${voteCounts.downvotes})`)
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(true)
             );
 
-            // Try to find the review message in monitored channels
-            for (const channelId of config.monitoredChannelIds) {
-              try {
-                const channel = await interaction.guild!.channels.fetch(channelId);
-                if (channel?.isTextBased()) {
-                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
-                  await reviewMessage.edit({ components: [disabledRow] });
-                  break; // Found and updated, exit loop
-                }
-              } catch (err) {
-                // Message not in this channel, try next
-                continue;
+            // Update the review message in the monitored channel
+            try {
+              const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
+              if (channel?.isTextBased()) {
+                const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                await reviewMessage.edit({ components: [disabledRow] });
               }
+            } catch (err) {
+              console.error('Failed to update review message:', err);
             }
           } catch (error) {
             console.error('Failed to disable buttons:', error);
           }
         }
 
-        if (config.shortlistChannelId) {
+        // Find the shortlist channel for this monitored channel
+        const { channelPairService } = await import('./services/ChannelPairService');
+        const shortlistChannelId = post.monitoredChannelId ? await channelPairService.getShortlistChannelId(guildId, post.monitoredChannelId) : null;
+
+        if (shortlistChannelId) {
           try {
-            const shortlistChannel = await interaction.guild!.channels.fetch(config.shortlistChannelId);
+            const shortlistChannel = await interaction.guild!.channels.fetch(shortlistChannelId);
             if (shortlistChannel?.isTextBased()) {
               const voteCounts = await voteService.getVoteCounts(postId);
               const shortlistEmbed = new EmbedBuilder()
@@ -956,35 +979,31 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         await postService.updateStatus(postId, PostStatus.REJECTED);
 
         // Update review message buttons if it exists
-        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
+        if (post.reviewMessageId && post.monitoredChannelId) {
           try {
             const voteCounts = await voteService.getVoteCounts(postId);
             const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel(`Not Slop (${voteCounts.upvotes})`)
+                .setLabel(`Yes (${voteCounts.upvotes})`)
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel(`Slop (${voteCounts.downvotes})`)
+                .setLabel(`No (${voteCounts.downvotes})`)
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(true)
             );
 
-            // Try to find the review message in monitored channels
-            for (const channelId of config.monitoredChannelIds) {
-              try {
-                const channel = await interaction.guild!.channels.fetch(channelId);
-                if (channel?.isTextBased()) {
-                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
-                  await reviewMessage.edit({ components: [disabledRow] });
-                  break; // Found and updated, exit loop
-                }
-              } catch (err) {
-                // Message not in this channel, try next
-                continue;
+            // Update the review message in the monitored channel
+            try {
+              const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
+              if (channel?.isTextBased()) {
+                const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                await reviewMessage.edit({ components: [disabledRow] });
               }
+            } catch (err) {
+              console.error('Failed to update review message:', err);
             }
           } catch (error) {
             console.error('Failed to disable buttons:', error);
@@ -1023,32 +1042,28 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         await postService.updateStatus(postId, PostStatus.PENDING);
 
         // Update review message buttons if it exists
-        if (post.reviewMessageId && config.monitoredChannelIds.length > 0) {
+        if (post.reviewMessageId && post.monitoredChannelId) {
           try {
             const enabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel('Not Slop (0)')
+                .setLabel('Yes (0)')
                 .setStyle(ButtonStyle.Success),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel('Slop (0)')
+                .setLabel('No (0)')
                 .setStyle(ButtonStyle.Danger)
             );
 
-            // Try to find the review message in monitored channels
-            for (const channelId of config.monitoredChannelIds) {
-              try {
-                const channel = await interaction.guild!.channels.fetch(channelId);
-                if (channel?.isTextBased()) {
-                  const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
-                  await reviewMessage.edit({ components: [enabledRow] });
-                  break; // Found and updated, exit loop
-                }
-              } catch (err) {
-                // Message not in this channel, try next
-                continue;
+            // Update the review message in the monitored channel
+            try {
+              const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
+              if (channel?.isTextBased()) {
+                const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+                await reviewMessage.edit({ components: [enabledRow] });
               }
+            } catch (err) {
+              console.error('Failed to update review message:', err);
             }
           } catch (error) {
             console.error('Failed to re-enable buttons:', error);

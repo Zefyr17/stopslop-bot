@@ -12,7 +12,6 @@ export class GuildConfigService {
       config = await prisma.guildConfig.create({
         data: {
           guildId,
-          monitoredChannelIds: [],
           voterRoleIds: [],
           upvoteThreshold: 5,
           downvoteThreshold: 5,
@@ -32,9 +31,6 @@ export class GuildConfigService {
   async updateConfig(
     guildId: string,
     data: Partial<{
-      monitoredChannelIds: string[];
-      reviewChannelId: string | null;
-      shortlistChannelId: string | null;
       modLogChannelId: string | null;
       voterRoleIds: string[];
       judgeRoleIds: string[];
@@ -47,18 +43,6 @@ export class GuildConfigService {
       where: { guildId },
       data,
     });
-  }
-
-  async setMonitoredChannels(guildId: string, channelIds: string[]): Promise<GuildConfig> {
-    return this.updateConfig(guildId, { monitoredChannelIds: channelIds });
-  }
-
-  async setReviewChannel(guildId: string, channelId: string | null): Promise<GuildConfig> {
-    return this.updateConfig(guildId, { reviewChannelId: channelId });
-  }
-
-  async setShortlistChannel(guildId: string, channelId: string | null): Promise<GuildConfig> {
-    return this.updateConfig(guildId, { shortlistChannelId: channelId });
   }
 
   async setVoterRoles(guildId: string, roleIds: string[]): Promise<GuildConfig> {

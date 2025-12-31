@@ -48,19 +48,20 @@ model Week {
 }
 
 model Post {
-  id              String     @id @default(cuid())
-  link            String
-  linkHash        String     @unique
-  status          PostStatus @default(PENDING)
-  weekId          String
-  authorId        String
-  originalMessage String?
-  reviewMessageId String?
-  week            Week       @relation(fields: [weekId], references: [id])
-  votes           Vote[]
-  ratings         Rating[]
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  link               String
+  linkHash           String     @unique
+  status             PostStatus @default(PENDING)
+  weekId             String
+  authorId           String
+  monitoredChannelId String?
+  originalMessage    String?
+  reviewMessageId    String?
+  week               Week       @relation(fields: [weekId], references: [id])
+  votes              Vote[]
+  ratings            Rating[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 }
 
 model Vote {
@@ -90,17 +91,27 @@ model Rating {
 }
 
 model GuildConfig {
-  id                   String   @id @default(cuid())
-  guildId              String   @unique
-  monitoredChannelIds  String[] @default([])
-  reviewChannelId      String?
-  shortlistChannelId   String?
+  id                   String        @id @default(cuid())
+  guildId              String        @unique
+  channelPairs         ChannelPair[]
   modLogChannelId      String?
-  voterRoleIds         String[] @default([])
-  judgeRoleIds         String[] @default([])
-  adminRoleIds         String[] @default([])
-  upvoteThreshold      Int      @default(5)
-  downvoteThreshold    Int      @default(5)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  voterRoleIds         String[]      @default([])
+  judgeRoleIds         String[]      @default([])
+  adminRoleIds         String[]      @default([])
+  upvoteThreshold      Int           @default(5)
+  downvoteThreshold    Int           @default(5)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model ChannelPair {
+  id                  String      @id @default(cuid())
+  guildConfigId       String
+  monitoredChannelId  String
+  shortlistChannelId  String
+  guildConfig         GuildConfig @relation(fields: [guildConfigId], references: [id], onDelete: Cascade)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@unique([guildConfigId, monitoredChannelId])
 }

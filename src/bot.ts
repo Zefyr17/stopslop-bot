@@ -17,6 +17,9 @@ export const bot = new Client({
   ],
 });
 
+// Store copy text for results buttons
+const resultsCache = new Map<string, string>();
+
 bot.once(Events.ClientReady, async (client) => {
   console.log(`Ready! Logged in as ${client.user.tag}`);
 
@@ -311,6 +314,22 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
     if (customId.startsWith('rate_')) {
       await handleRateButton(interaction, guildId);
+      return;
+    }
+
+    if (customId.startsWith('copy_results_')) {
+      const cachedText = resultsCache.get(customId);
+      if (cachedText) {
+        await interaction.reply({
+          content: `\`\`\`\n${cachedText}\n\`\`\`\n*Copy the text above to use it elsewhere!*`,
+          ephemeral: true
+        });
+      } else {
+        await interaction.reply({
+          content: '❌ Results text not found. Please run `/results` again.',
+          ephemeral: true
+        });
+      }
       return;
     }
 
@@ -912,8 +931,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       // Build title with channel name
       const title = `${channelName.charAt(0).toUpperCase() + channelName.slice(1)} Challenge - Weekly Content Contest Winners 💫`;
 
-      // Add title to result lines
-      const finalMessage: string[] = [title, ''];
+      // Build description for embed
+      const resultLines: string[] = [];
 
       // Top 5 winners
       for (let i = 0; i < Math.min(5, top12.length); i++) {
@@ -922,26 +941,76 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const xp = xpRewards[i];
         const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
         const ratingCount = item.stats.totalRatings;
-        finalMessage.push(`${medal} <@${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
-        finalMessage.push(item.post.link);
-        finalMessage.push('');
+        resultLines.push(`${medal} <@${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        resultLines.push(item.post.link);
+        resultLines.push('');
       }
 
       // Honorary Contributions (6-12)
       if (top12.length > 5) {
-        finalMessage.push('✨ Honorary Contributions - 500 XP');
+        resultLines.push('✨ Honorary Contributions - 500 XP');
         for (let i = 5; i < top12.length; i++) {
           const item = top12[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
-          finalMessage.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
+          resultLines.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
         }
-        finalMessage.push('');
+        resultLines.push('');
       }
 
-      finalMessage.push('Thank you all for your contributions ✨');
+      resultLines.push('Thank you all for your contributions ✨');
 
-      await interaction.reply({ content: finalMessage.join('\n') });
+      // Create embed
+      const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle(title)
+        .setDescription(resultLines.join('\n'))
+        .setTimestamp();
+
+      // Create copy button with full text (without mentions, just usernames)
+      const copyText: string[] = [title, ''];
+
+      for (let i = 0; i < Math.min(5, top12.length); i++) {
+        const item = top12[i];
+        const medal = medals[i];
+        const xp = xpRewards[i];
+        const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
+        const ratingCount = item.stats.totalRatings;
+        const author = await interaction.guild?.members.fetch(item.post.authorId);
+        const username = author ? `@${author.user.username}` : `<@${item.post.authorId}>`;
+        copyText.push(`${medal} ${username} ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        copyText.push(item.post.link);
+        copyText.push('');
+      }
+
+      if (top12.length > 5) {
+        copyText.push('✨ Honorary Contributions - 500 XP');
+        for (let i = 5; i < top12.length; i++) {
+          const item = top12[i];
+          const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
+          const ratingCount = item.stats.totalRatings;
+          const author = await interaction.guild?.members.fetch(item.post.authorId);
+          const username = author ? `@${author.user.username}` : `<@${item.post.authorId}>`;
+          copyText.push(`${username} ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
+        }
+        copyText.push('');
+      }
+
+      copyText.push('Thank you all for your contributions ✨');
+
+      // Create Copy button - store text in button customId (limited to 100 chars)
+      // Instead, we'll use a modal or send ephemeral follow-up
+      const copyButton = new ButtonBuilder()
+        .setCustomId(`copy_results_${activeWeek.id}`)
+        .setLabel('📋 Copy Results')
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(copyButton);
+
+      // Store copy text in cache for later retrieval
+      resultsCache.set(`copy_results_${activeWeek.id}`, copyText.join('\n'));
+
+      await interaction.reply({ embeds: [embed], components: [row] });
       return;
     }
 

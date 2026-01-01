@@ -893,22 +893,46 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       postsWithRatings.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
 
-      const medals = ['🥇', '🥈', '🥉'];
-      const resultLines = postsWithRatings.map((item, index) => {
-        const medal = medals[index] || `${index + 1}.`;
-        const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'No ratings';
-        const ratingCount = item.stats.totalRatings;
-        return `${medal} **${avgRating} ⭐** (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})\n${item.post.link}\nBy <@${item.post.authorId}>`;
-      });
+      // Take only top 12
+      const top12 = postsWithRatings.slice(0, 12);
+
+      // XP rewards for different positions
+      const xpRewards = [3000, 2500, 2000, 1500, 1000, 500, 500, 500, 500, 500, 500, 500];
+      const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+
+      // Build results message
+      const resultLines: string[] = [];
+
+      // Top 5 winners
+      for (let i = 0; i < Math.min(5, top12.length); i++) {
+        const item = top12[i];
+        const medal = medals[i];
+        const xp = xpRewards[i];
+        resultLines.push(`${medal} <@${item.post.authorId}> ${xp} XP`);
+        resultLines.push(item.post.link);
+        resultLines.push('');
+      }
+
+      // Honorary Contributions (6-12)
+      if (top12.length > 5) {
+        resultLines.push('✨ Honorary Contributions - 500 XP');
+        for (let i = 5; i < top12.length; i++) {
+          const item = top12[i];
+          resultLines.push(`<@${item.post.authorId}> ${item.post.link}`);
+        }
+        resultLines.push('');
+      }
+
+      resultLines.push('Thank you all for your contributions ✨');
 
       const title = monitoredChannel
-        ? `🏆 Weekly Results - <#${monitoredChannel.id}>`
-        : '🏆 Weekly Results - All Channels';
+        ? `Weekly Content Contest Winners 💫`
+        : 'Weekly Content Contest Winners 💫';
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
         .setTitle(title)
-        .setDescription(resultLines.join('\n\n'))
+        .setDescription(resultLines.join('\n'))
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed] });

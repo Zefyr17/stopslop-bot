@@ -900,8 +900,20 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       const xpRewards = [3000, 2500, 2000, 1500, 1000, 500, 500, 500, 500, 500, 500, 500];
       const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
 
-      // Build results message
-      const resultLines: string[] = [];
+      // Get channel name for title
+      let channelName = 'Contest';
+      if (monitoredChannel) {
+        const channel = await interaction.guild?.channels.fetch(monitoredChannel.id);
+        if (channel?.isTextBased()) {
+          channelName = channel.name;
+        }
+      }
+
+      // Build title with channel name
+      const title = `${channelName.charAt(0).toUpperCase() + channelName.slice(1)} Challenge - Weekly Content Contest Winners 💫`;
+
+      // Add title to result lines
+      const finalMessage: string[] = [title, ''];
 
       // Top 5 winners
       for (let i = 0; i < Math.min(5, top12.length); i++) {
@@ -910,37 +922,26 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const xp = xpRewards[i];
         const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
         const ratingCount = item.stats.totalRatings;
-        resultLines.push(`${medal} <@${item.post.authorId}> ${xp} XP`);
-        resultLines.push(`⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
-        resultLines.push(item.post.link);
-        resultLines.push('');
+        finalMessage.push(`${medal} <@${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        finalMessage.push(item.post.link);
+        finalMessage.push('');
       }
 
       // Honorary Contributions (6-12)
       if (top12.length > 5) {
-        resultLines.push('✨ Honorary Contributions - 500 XP');
+        finalMessage.push('✨ Honorary Contributions - 500 XP');
         for (let i = 5; i < top12.length; i++) {
           const item = top12[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
-          resultLines.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
+          finalMessage.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
         }
-        resultLines.push('');
+        finalMessage.push('');
       }
 
-      resultLines.push('Thank you all for your contributions ✨');
+      finalMessage.push('Thank you all for your contributions ✨');
 
-      const title = monitoredChannel
-        ? `Weekly Content Contest Winners 💫`
-        : 'Weekly Content Contest Winners 💫';
-
-      const embed = new EmbedBuilder()
-        .setColor(0xffd700)
-        .setTitle(title)
-        .setDescription(resultLines.join('\n'))
-        .setTimestamp();
-
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ content: finalMessage.join('\n') });
       return;
     }
 

@@ -553,6 +553,58 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       return;
     }
 
+    if (commandName === 'help') {
+      const config = await guildConfigService.getConfig(guildId);
+      const { channelPairService } = await import('./services/ChannelPairService');
+      const pairs = await channelPairService.getChannelPairs(guildId);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('Bot Usage Guide')
+        .setDescription('**Quick Start**\n\n1. Set up admin roles with `/config set-admin-roles`\n2. Create channel pairs with `/channel-pair add`\n3. Start voting period with `/week start`')
+        .addFields(
+          {
+            name: 'Current Config',
+            value: `• Thresholds: ${config?.upvoteThreshold || 3} to accept / ${config?.downvoteThreshold || 3} to remove\n• Voter roles: ${config?.voterRoleIds.length ? config.voterRoleIds.map(id => `<@&${id}>`).join(', ') : 'Everyone'}\n• Judge roles: ${config?.judgeRoleIds.length ? config.judgeRoleIds.map(id => `<@&${id}>`).join(', ') : 'Everyone'}\n• Monitored channels: ${pairs.length} pair${pairs.length !== 1 ? 's' : ''}`,
+            inline: false
+          },
+          {
+            name: 'Channel Management',
+            value: '`/channel-pair add` - create monitored → shortlist channel pair\n`/channel-pair remove` - remove a channel pair',
+            inline: false
+          },
+          {
+            name: 'Week Management',
+            value: '`/week start [channel]` - start accepting posts\n`/week close [channel]` - close voting period',
+            inline: false
+          },
+          {
+            name: 'Configuration',
+            value: '`/config show` - view current configuration\n`/config set-mod-log` - set mod log channel\n`/config set-admin-roles` - set admin roles',
+            inline: false
+          },
+          {
+            name: 'Results & Export',
+            value: '`/results [channel]` - view current rankings\n`/export results` - export last week to CSV',
+            inline: false
+          },
+          {
+            name: 'Post Moderation',
+            value: '`/post approve` - manually approve a post\n`/post reject` - manually reject a post\n`/post reset_votes` - clear votes on a post',
+            inline: false
+          },
+          {
+            name: 'How It Works',
+            value: '**Content Voting**\nWhen someone posts a link in a monitored channel, the bot creates a vote with Yes/No buttons.\n\n• Enough Yes votes → post shortlisted, appears in shortlist channel with rating buttons\n• Enough No votes → post rejected and deleted\n\n**Rating System**\nJudges rate shortlisted posts with 1-5 stars. Use `/results` to see rankings by average rating.\n\n**Duplicate Detection**\nIf someone posts the same link twice, it\'s automatically deleted.',
+            inline: false
+          }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+      return;
+    }
+
     if (commandName === 'config') {
       const subcommand = interaction.options.getSubcommand();
 

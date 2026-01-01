@@ -6,6 +6,10 @@ export const commands = [
     .setDescription('Check if the bot is working'),
 
   new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Show bot usage guide and available commands'),
+
+  new SlashCommandBuilder()
     .setName('config')
     .setDescription('View or configure server settings')
     .addSubcommand(subcommand =>

@@ -428,16 +428,6 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         if (shortlistChannelId) {
           const shortlistChannel = await interaction.guild.channels.fetch(shortlistChannelId);
           if (shortlistChannel?.isTextBased()) {
-          const shortlistEmbed = new EmbedBuilder()
-            .setColor(0x00ff00)
-            .setTitle('⭐ Shortlisted Content')
-            .setDescription(post.link)
-            .addFields(
-              { name: 'Author', value: `<@${post.authorId}>`, inline: true },
-              { name: 'Votes', value: `👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}`, inline: true }
-            )
-            .setTimestamp();
-
           // Create star rating buttons (1-10)
           const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId(`rate_${post.id}_1`).setLabel('1⭐').setStyle(ButtonStyle.Primary),
@@ -456,7 +446,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
           );
 
             await shortlistChannel.send({
-              embeds: [shortlistEmbed],
+              content: `⭐ **Shortlisted Content** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
               components: [rateRow1, rateRow2]
             });
             console.log(`Posted to shortlist channel: ${post.id}`);
@@ -1046,16 +1036,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const shortlistChannel = await interaction.guild!.channels.fetch(shortlistChannelId);
             if (shortlistChannel?.isTextBased()) {
               const voteCounts = await voteService.getVoteCounts(postId);
-              const shortlistEmbed = new EmbedBuilder()
-                .setColor(0x00ff00)
-                .setTitle('⭐ Shortlisted Content (Admin Override)')
-                .setDescription(post.link)
-                .addFields(
-                  { name: 'Author', value: `<@${post.authorId}>`, inline: true },
-                  { name: 'Votes', value: `👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}`, inline: true }
-                )
-                .setTimestamp();
-
               // Create star rating buttons (1-10)
               const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder().setCustomId(`rate_${postId}_1`).setLabel('1⭐').setStyle(ButtonStyle.Primary),
@@ -1074,7 +1054,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               );
 
               await shortlistChannel.send({
-                embeds: [shortlistEmbed],
+                content: `⭐ **Shortlisted Content (Admin Override)** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
                 components: [rateRow1, rateRow2]
               });
             }

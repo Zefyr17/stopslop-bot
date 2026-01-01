@@ -953,7 +953,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const item = top12[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
-          resultLines.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
+          resultLines.push(`<@${item.post.authorId}> ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
         }
         resultLines.push('');
       }
@@ -991,18 +991,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const ratingCount = item.stats.totalRatings;
           const author = await interaction.guild?.members.fetch(item.post.authorId);
           const username = author ? `@${author.user.username}` : `<@${item.post.authorId}>`;
-          copyText.push(`${username} ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
+          copyText.push(`${username} ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
         }
         copyText.push('');
       }
 
       copyText.push('Thank you all for your contributions ✨');
 
-      // Create Copy button - store text in button customId (limited to 100 chars)
-      // Instead, we'll use a modal or send ephemeral follow-up
+      // Create Copy button
       const copyButton = new ButtonBuilder()
         .setCustomId(`copy_results_${activeWeek.id}`)
-        .setLabel('📋 Copy Results')
+        .setLabel('Copy')
         .setStyle(ButtonStyle.Secondary);
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(copyButton);

@@ -908,7 +908,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const item = top12[i];
         const medal = medals[i];
         const xp = xpRewards[i];
+        const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
+        const ratingCount = item.stats.totalRatings;
         resultLines.push(`${medal} <@${item.post.authorId}> ${xp} XP`);
+        resultLines.push(`⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
         resultLines.push(item.post.link);
         resultLines.push('');
       }
@@ -918,7 +921,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         resultLines.push('✨ Honorary Contributions - 500 XP');
         for (let i = 5; i < top12.length; i++) {
           const item = top12[i];
-          resultLines.push(`<@${item.post.authorId}> ${item.post.link}`);
+          const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
+          const ratingCount = item.stats.totalRatings;
+          resultLines.push(`<@${item.post.authorId}> ⭐ ${avgRating} (${ratingCount}) ${item.post.link}`);
         }
         resultLines.push('');
       }

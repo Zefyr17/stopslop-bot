@@ -225,20 +225,28 @@ bot.on(Events.MessageCreate, async (message) => {
       // Delete the user's message
       try {
         await message.delete();
+        console.log(`Deleted duplicate message from ${message.author.tag} in channel ${message.channelId}`);
       } catch (error) {
         console.error('Failed to delete duplicate message:', error);
+        console.error('Bot may be missing MANAGE_MESSAGES permission in this channel');
       }
 
       // Send DM to user
       try {
         await message.author.send(
-          `Your message in **${message.guild?.name}** was deleted because it contained a link that was already posted.`
+          `Your message in **${message.guild?.name}** was deleted because it contained a link that was already posted.\n\nOriginal post: <https://discord.com/channels/${message.guildId}/${duplicatePost.monitoredChannelId}/${duplicatePost.reviewMessageId}>`
         );
       } catch (dmError) {
         console.log(`Could not DM user ${message.author.tag} about duplicate link (DMs might be closed)`);
       }
 
-      // Note: We don't log duplicates to mod_log or send channel notifications to avoid spam
+      // Log to mod_log
+      await modLogService.log(guildId, ModLogEventType.DUPLICATE_LINK_DELETED, {
+        postLink: link,
+        authorId: message.author.id,
+        monitoredChannelId: message.channelId,
+        details: `User <@${message.author.id}> posted a duplicate link. Original post by <@${duplicatePost.authorId}>.`,
+      });
 
       return;
     }

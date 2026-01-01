@@ -183,8 +183,8 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
-    .setName('fix-old-weeks')
-    .setDescription('Close old global active weeks (Admin only - fixes voting buttons issue)')
+    .setName('reset-database')
+    .setDescription('⚠️ DANGER: Reset entire database and config (Admin only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 

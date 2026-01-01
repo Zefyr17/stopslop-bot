@@ -10,6 +10,7 @@ export enum ModLogEventType {
   ADMIN_OVERRIDE_RESET = 'ADMIN_OVERRIDE_RESET',
   RATING_CHANGED = 'RATING_CHANGED',
   DUPLICATE_LINK_DELETED = 'DUPLICATE_LINK_DELETED',
+  WEEK_STARTED = 'WEEK_STARTED',
   WEEK_CLOSED = 'WEEK_CLOSED',
   EXPORT_RESULTS = 'EXPORT_RESULTS',
   BOT_ERROR = 'BOT_ERROR',
@@ -198,6 +199,24 @@ export class ModLogService {
           );
         if (data.postLink) {
           embed.addFields({ name: 'Link', value: data.postLink });
+        }
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
+        break;
+
+      case ModLogEventType.WEEK_STARTED:
+        embed
+          .setColor(0x00ff00)
+          .setTitle('🎉 Week Started')
+          .setDescription(`A new voting period has been started.`)
+          .addFields(
+            { name: 'Week ID', value: data.weekId || 'Unknown', inline: true },
+            { name: 'Admin', value: data.adminId ? `<@${data.adminId}>` : 'System', inline: true },
+            { name: 'Posts Count', value: data.postsCount?.toString() || '0', inline: true }
+          );
+        if (data.weekDates) {
+          embed.addFields({ name: 'Period', value: data.weekDates });
         }
         if (data.details) {
           embed.addFields({ name: 'Details', value: data.details });

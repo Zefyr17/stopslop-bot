@@ -1215,7 +1215,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const endDate = newWeek.endDate.toISOString().split('T')[0];
 
           // Log to mod_log
-          await modLogService.log(guildId, ModLogEventType.WEEK_CLOSED, {
+          await modLogService.log(guildId, ModLogEventType.WEEK_STARTED, {
             weekId: newWeek.id,
             adminId: interaction.user.id,
             postsCount: 0,
@@ -1314,7 +1314,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
     }
 
-    if (commandName === 'fix-old-weeks') {
+    if (commandName === 'reset-database') {
       try {
         const member = await interaction.guild!.members.fetch(interaction.user.id);
         const userRoleIds = Array.from(member.roles.cache.keys());
@@ -1336,54 +1336,25 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         const { prisma } = await import('./db');
 
-        // Find all ACTIVE weeks that don't have a monitoredChannelId (old global weeks)
-        const oldGlobalWeeks = await prisma.week.findMany({
-          where: {
-            status: WeekStatus.ACTIVE,
-            monitoredChannelId: null
-          },
-          orderBy: { createdAt: 'desc' }
-        });
-
-        if (oldGlobalWeeks.length === 0) {
-          await interaction.editReply({
-            content: '✅ No old global active weeks found - everything is already clean!\n\nAll active weeks are properly assigned to channel pairs.',
-          });
-          return;
-        }
-
-        // Close old global weeks
-        const result = await prisma.week.updateMany({
-          where: {
-            status: WeekStatus.ACTIVE,
-            monitoredChannelId: null
-          },
-          data: {
-            status: WeekStatus.CLOSED
-          }
-        });
-
-        // Get current active weeks
-        const activeWeeks = await prisma.week.findMany({
-          where: { status: WeekStatus.ACTIVE },
-          orderBy: { createdAt: 'desc' }
-        });
-
-        const weeksList = activeWeeks.length > 0
-          ? activeWeeks.map((week) => `• Week ${week.id.substring(0, 8)}... for channel <#${week.monitoredChannelId}>`).join('\n')
-          : '*None - weeks will be created automatically when posts are submitted*';
+        // Delete all data in correct order (respecting foreign keys)
+        await prisma.rating.deleteMany({});
+        await prisma.vote.deleteMany({});
+        await prisma.post.deleteMany({});
+        await prisma.week.deleteMany({});
+        await prisma.channelPair.deleteMany({});
+        await prisma.guildConfig.deleteMany({});
 
         await modLogService.log(guildId, ModLogEventType.BOT_ERROR, {
-          error: 'Fixed old weeks',
-          details: `Admin <@${interaction.user.id}> closed ${result.count} old global active week(s). Current active weeks: ${activeWeeks.length}`,
+          error: 'Database Reset',
+          details: `Admin <@${interaction.user.id}> reset the entire database. All data has been deleted.`,
         });
 
         await interaction.editReply({
-          content: `✅ **Fixed old weeks issue!**\n\n**Closed:** ${result.count} old global active week(s)\n**Current active weeks:** ${activeWeeks.length}\n\n${weeksList}\n\n🎉 Voting buttons should now work correctly in monitored channels!`,
+          content: `✅ **Database reset complete!**\n\n**All data deleted:**\n• All ratings\n• All votes\n• All posts\n• All weeks\n• All channel pairs\n• All guild configs\n\n⚠️ **Please reconfigure the bot:**\n1. Use \`/config set-admin-roles\` to set admin roles\n2. Use \`/channel-pair add\` to create channel pairs\n3. Use \`/week start\` to begin accepting posts`,
         });
       } catch (error) {
-        console.error('Error fixing old weeks:', error);
-        await interaction.editReply({ content: '❌ Failed to fix old weeks. Check logs for details.' });
+        console.error('Error resetting database:', error);
+        await interaction.editReply({ content: '❌ Failed to reset database. Check logs for details.' });
       }
       return;
     }

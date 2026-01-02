@@ -272,12 +272,12 @@ bot.on(Events.MessageCreate, async (message) => {
 
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
-      .setLabel('Yes (0)')
+      .setLabel('Yes')
       .setStyle(ButtonStyle.Success);
 
     const downvoteButton = new ButtonBuilder()
       .setCustomId(`downvote_${post.id}`)
-      .setLabel('No (0)')
+      .setLabel('No')
       .setStyle(ButtonStyle.Danger);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(upvoteButton, downvoteButton);
@@ -406,12 +406,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`Yes (${voteCounts.upvotes})`)
+          .setLabel('Yes')
           .setStyle(ButtonStyle.Success)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`No (${voteCounts.downvotes})`)
+          .setLabel('No')
           .setStyle(ButtonStyle.Danger)
           .setDisabled(true)
       );
@@ -456,14 +456,15 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
       await interaction.deferUpdate();
     } else {
+      // Update buttons without vote counts (privacy)
       const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
-          .setLabel(`Yes (${voteCounts.upvotes})`)
+          .setLabel('Yes')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
-          .setLabel(`No (${voteCounts.downvotes})`)
+          .setLabel('No')
           .setStyle(ButtonStyle.Danger)
       );
 
@@ -1002,12 +1003,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel(`Yes (${voteCounts.upvotes})`)
+                .setLabel('Yes')
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel(`No (${voteCounts.downvotes})`)
+                .setLabel('No')
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(true)
             );
@@ -1092,12 +1093,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel(`Yes (${voteCounts.upvotes})`)
+                .setLabel('Yes')
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel(`No (${voteCounts.downvotes})`)
+                .setLabel('No')
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(true)
             );
@@ -1154,11 +1155,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const enabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
-                .setLabel('Yes (0)')
+                .setLabel('Yes')
                 .setStyle(ButtonStyle.Success),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
-                .setLabel('No (0)')
+                .setLabel('No')
                 .setStyle(ButtonStyle.Danger)
             );
 

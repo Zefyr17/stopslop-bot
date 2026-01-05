@@ -273,17 +273,17 @@ bot.on(Events.MessageCreate, async (message) => {
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
       .setLabel('Yes')
-      .setStyle(ButtonStyle.Success);
+      .setStyle(ButtonStyle.Primary);
 
     const downvoteButton = new ButtonBuilder()
       .setCustomId(`downvote_${post.id}`)
       .setLabel('No')
-      .setStyle(ButtonStyle.Danger);
+      .setStyle(ButtonStyle.Secondary);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(upvoteButton, downvoteButton);
 
     const reviewMessage = await message.reply({
-      content: `Should this post by <@${message.author.id}> make the shortlist for our weekly contest? Cast your vote below.`,
+      content: `Should this post by <@${message.author.id}> be featured among this week's contest winners? (Singularity role only)`,
       components: [row],
       allowedMentions: { repliedUser: false },
     });
@@ -407,12 +407,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
           .setLabel('Yes')
-          .setStyle(ButtonStyle.Success)
+          .setStyle(ButtonStyle.Primary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
           .setLabel('No')
-          .setStyle(ButtonStyle.Danger)
+          .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
       );
 
@@ -461,11 +461,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         new ButtonBuilder()
           .setCustomId(`upvote_${post.id}`)
           .setLabel('Yes')
-          .setStyle(ButtonStyle.Success),
+          .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`downvote_${post.id}`)
           .setLabel('No')
-          .setStyle(ButtonStyle.Danger)
+          .setStyle(ButtonStyle.Secondary)
       );
 
       await interaction.message.edit({ components: [updatedRow] });
@@ -1004,12 +1004,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
                 .setLabel('Yes')
-                .setStyle(ButtonStyle.Success)
+                .setStyle(ButtonStyle.Primary)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
                 .setLabel('No')
-                .setStyle(ButtonStyle.Danger)
+                .setStyle(ButtonStyle.Secondary)
                 .setDisabled(true)
             );
 
@@ -1094,12 +1094,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
                 .setLabel('Yes')
-                .setStyle(ButtonStyle.Success)
+                .setStyle(ButtonStyle.Primary)
                 .setDisabled(true),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
                 .setLabel('No')
-                .setStyle(ButtonStyle.Danger)
+                .setStyle(ButtonStyle.Secondary)
                 .setDisabled(true)
             );
 
@@ -1156,11 +1156,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               new ButtonBuilder()
                 .setCustomId(`upvote_${postId}`)
                 .setLabel('Yes')
-                .setStyle(ButtonStyle.Success),
+                .setStyle(ButtonStyle.Primary),
               new ButtonBuilder()
                 .setCustomId(`downvote_${postId}`)
                 .setLabel('No')
-                .setStyle(ButtonStyle.Danger)
+                .setStyle(ButtonStyle.Secondary)
             );
 
             // Update the review message in the monitored channel

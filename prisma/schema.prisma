@@ -43,6 +43,7 @@ model Week {
   startDate          DateTime
   endDate            DateTime
   status             WeekStatus @default(ACTIVE)
+  rankingOpen        Boolean    @default(false)
   posts              Post[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt

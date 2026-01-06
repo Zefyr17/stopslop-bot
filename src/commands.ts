@@ -178,6 +178,19 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
+    .setName('ranking')
+    .setDescription('Ranking session management commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('start')
+        .setDescription('Open ranking for judges to rate shortlisted content (Admin only)')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Monitored channel to open ranking for (optional - opens for all if not specified)')
+            .setRequired(false)))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
     .setName('export')
     .setDescription('Export commands')
     .addSubcommand(subcommand =>

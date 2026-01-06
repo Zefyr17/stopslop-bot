@@ -8,6 +8,7 @@ import { weekService } from './services/WeekService';
 import { exportService } from './services/ExportService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
+import { prisma } from './db';
 
 export const bot = new Client({
   intents: [
@@ -536,16 +537,33 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
+    // Check if ranking is open
+    if (week && !week.rankingOpen) {
+      await interaction.reply({ content: 'Admin has not started ranking session yet.', ephemeral: true });
+      return;
+    }
+
     if (post.status !== PostStatus.SHORTLISTED) {
       await interaction.reply({ content: 'Only shortlisted posts can be rated.', ephemeral: true });
       return;
     }
 
+    // Check if user already rated this post
+    const existingRating = await ratingService.getUserRating(postId, interaction.user.id);
+
     // Save the rating
     await ratingService.upsertRating(postId, interaction.user.id, rating);
 
+    // Show appropriate confirmation message
+    let message: string;
+    if (existingRating) {
+      message = `You changed your rating to ${rating}/10`;
+    } else {
+      message = `You rated this post ${rating}/10`;
+    }
+
     await interaction.reply({
-      content: `✅ Rating saved: ${rating}/10`,
+      content: message,
       ephemeral: true,
     });
   } catch (error) {
@@ -1325,6 +1343,64 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: errorMessage,
           });
           await interaction.reply({ content: `❌ Failed to start voting period: ${errorMessage}`, ephemeral: true });
+        }
+        return;
+      }
+    }
+
+    if (commandName === 'ranking') {
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'start') {
+        try {
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const userRoleIds = Array.from(member.roles.cache.keys());
+
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+          if (!isAdmin) {
+            await interaction.reply({ content: '❌ You do not have permission to open ranking. (Admin role required)', ephemeral: true });
+            return;
+          }
+
+          // Get optional monitored channel parameter
+          const monitoredChannel = interaction.options.getChannel('monitored', false);
+          const monitoredChannelId = monitoredChannel?.id;
+
+          // Get active week for this channel (or global if no channel specified)
+          const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
+          if (!activeWeek) {
+            await interaction.reply({ content: 'No active voting period found. Use /week start first.', ephemeral: true });
+            return;
+          }
+
+          if (activeWeek.rankingOpen) {
+            const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+            await interaction.reply({ content: `Ranking is already open${channelInfo}.`, ephemeral: true });
+            return;
+          }
+
+          // Open ranking
+          const updatedWeek = await prisma.week.update({
+            where: { id: activeWeek.id },
+            data: { rankingOpen: true },
+          });
+
+          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+
+          await interaction.reply({
+            content: `✅ **Ranking session opened!**${channelInfo}\n\nJudges can now rate shortlisted content.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error opening ranking:', error);
+          await interaction.reply({ content: '❌ Failed to open ranking session.', ephemeral: true });
         }
         return;
       }

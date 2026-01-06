@@ -454,7 +454,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      await interaction.deferUpdate();
+      // Show confirmation to voter
+      const voteMessage = voteType === VoteType.UP ? 'You voted Yes.' : 'You voted No.';
+      await interaction.reply({
+        content: voteMessage,
+        ephemeral: true
+      });
     } else {
       // Update buttons without vote counts (privacy)
       const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -469,7 +474,13 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       );
 
       await interaction.message.edit({ components: [updatedRow] });
-      await interaction.deferUpdate();
+
+      // Show confirmation to voter
+      const voteMessage = voteType === VoteType.UP ? 'You voted Yes.' : 'You voted No.';
+      await interaction.reply({
+        content: voteMessage,
+        ephemeral: true
+      });
     }
     } catch (error) {
       console.error('Error processing vote:', error);

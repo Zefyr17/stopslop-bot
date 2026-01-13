@@ -912,8 +912,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       postsWithRatings.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
 
-      // XP rewards for top 5 positions
-      const xpRewards = [3000, 2500, 2000, 1500, 1000];
       const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
 
       // Get channel name for title
@@ -945,18 +943,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       for (let i = 0; i < Math.min(5, postsWithRatings.length); i++) {
         const item = postsWithRatings[i];
         const medal = medals[i];
-        const xp = xpRewards[i];
         const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
         const ratingCount = item.stats.totalRatings;
         const username = await getUserDisplay(item.post.authorId);
-        resultLines.push(`${medal} ${username} ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        resultLines.push(`${medal} ${username} • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
         resultLines.push(item.post.link);
         resultLines.push('');
       }
 
-      // Honorary Contributions (6+) - ALL remaining posts get 500 XP
+      // Honorary Contributions (6+)
       if (postsWithRatings.length > 5) {
-        resultLines.push('✨ Honorary Contributions - 500 XP');
+        resultLines.push('✨ Honorary Contributions');
         for (let i = 5; i < postsWithRatings.length; i++) {
           const item = postsWithRatings[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';

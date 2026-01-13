@@ -1569,11 +1569,21 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const csvRows: string[] = [];
           csvRows.push('Post Author,Post Link,Judge,Rating,Rated At');
 
+          // Helper function to get username
+          const getUsernameForCSV = async (userId: string): Promise<string> => {
+            try {
+              const user = await interaction.client.users.fetch(userId);
+              return `@${user.username}`;
+            } catch {
+              return `<@${userId}>`;
+            }
+          };
+
           for (const log of ratingLogs) {
-            const authorMention = `<@${log.postAuthorId}>`;
-            const judgeMention = `<@${log.judgeId}>`;
+            const authorName = await getUsernameForCSV(log.postAuthorId);
+            const judgeName = await getUsernameForCSV(log.judgeId);
             const timestamp = log.ratedAt.toISOString().replace('T', ' ').split('.')[0];
-            csvRows.push(`"${authorMention}","${log.postLink}","${judgeMention}",${log.rating},"${timestamp}"`);
+            csvRows.push(`"${authorName}","${log.postLink}","${judgeName}",${log.rating},"${timestamp}"`);
           }
 
           const csvContent = csvRows.join('\n');

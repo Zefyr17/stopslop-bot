@@ -547,6 +547,12 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
+    // Check if user is trying to rate their own post
+    if (post.authorId === interaction.user.id) {
+      await interaction.reply({ content: 'You cannot rate your own post.', ephemeral: true });
+      return;
+    }
+
     // Check if user already rated this post
     const existingRating = await ratingService.getUserRating(postId, interaction.user.id);
 
@@ -900,17 +906,48 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
+      // Count total judges
+      const totalJudges = config.judgeRoleIds.length > 0 ? config.judgeRoleIds.length : 0;
+
       const postsWithRatings = await Promise.all(
         weekPosts.map(async (post) => {
           const stats = await ratingService.getPostRatingStats(post.id);
+
+          // Check if post author is a judge
+          let isAuthorJudge = false;
+          if (totalJudges > 0) {
+            try {
+              const authorMember = await interaction.guild!.members.fetch(post.authorId);
+              isAuthorJudge = config.judgeRoleIds.some((roleId: string) =>
+                authorMember.roles.cache.has(roleId)
+              );
+            } catch {
+              // If can't fetch member, assume not a judge
+              isAuthorJudge = false;
+            }
+          }
+
+          // Calculate expected votes
+          const expectedVotes = isAuthorJudge && totalJudges > 0
+            ? totalJudges - 1  // Author is judge, shouldn't vote for self
+            : totalJudges;      // Author is not judge, all should vote
+
+          // Calculate normalized score for fair comparison
+          const normalizedScore = expectedVotes > 0
+            ? stats.averageRating * (stats.totalRatings / expectedVotes)
+            : stats.averageRating;
+
           return {
             post,
             stats,
+            expectedVotes,
+            normalizedScore,
           };
         })
       );
 
-      postsWithRatings.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
+      // Sort by normalized score instead of just average rating
+      postsWithRatings.sort((a, b) => b.normalizedScore - a.normalizedScore);
 
       const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
 

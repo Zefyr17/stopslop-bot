@@ -932,6 +932,16 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       // Build description for embed
       const resultLines: string[] = [];
 
+      // Helper function to get username
+      const getUserDisplay = async (userId: string): Promise<string> => {
+        try {
+          const user = await interaction.client.users.fetch(userId);
+          return `@${user.username}`;
+        } catch {
+          return `<@${userId}>`;
+        }
+      };
+
       // Top 5 winners
       for (let i = 0; i < Math.min(5, postsWithRatings.length); i++) {
         const item = postsWithRatings[i];
@@ -939,7 +949,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const xp = xpRewards[i];
         const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
         const ratingCount = item.stats.totalRatings;
-        resultLines.push(`${medal} <@ ${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        const username = await getUserDisplay(item.post.authorId);
+        resultLines.push(`${medal} ${username} ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
         resultLines.push(item.post.link);
         resultLines.push('');
       }
@@ -951,7 +962,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const item = postsWithRatings[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
-          resultLines.push(`<@ ${item.post.authorId}> ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
+          const username = await getUserDisplay(item.post.authorId);
+          resultLines.push(`${username} ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
         }
         resultLines.push('');
       }

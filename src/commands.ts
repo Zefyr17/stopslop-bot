@@ -197,6 +197,14 @@ export const commands = [
       subcommand
         .setName('results')
         .setDescription('Export results of the last closed week as CSV (Admin only)'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('logs')
+        .setDescription('Export detailed rating logs for active week (Admin only)')
+        .addChannelOption(option =>
+          option.setName('monitored')
+            .setDescription('Filter by monitored channel (optional)')
+            .setRequired(false)))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()

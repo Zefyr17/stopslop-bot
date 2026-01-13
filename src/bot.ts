@@ -939,7 +939,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const xp = xpRewards[i];
         const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
         const ratingCount = item.stats.totalRatings;
-        resultLines.push(`${medal} <@${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+        resultLines.push(`${medal} <@ ${item.post.authorId}> ${xp} XP • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
         resultLines.push(item.post.link);
         resultLines.push('');
       }
@@ -951,7 +951,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const item = postsWithRatings[i];
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
-          resultLines.push(`<@${item.post.authorId}> ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
+          resultLines.push(`<@ ${item.post.authorId}> ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
         }
         resultLines.push('');
       }
@@ -1471,6 +1471,130 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: error instanceof Error ? error.message : 'Unknown error',
           });
           await interaction.reply({ content: '❌ Failed to export results. Check mod log for details.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'logs') {
+        try {
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const userRoleIds = Array.from(member.roles.cache.keys());
+
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+          if (!isAdmin) {
+            await interaction.reply({ content: '❌ You do not have permission to export logs. (Admin role required)', ephemeral: true });
+            return;
+          }
+
+          // Get optional monitored channel filter
+          const monitoredChannel = interaction.options.getChannel('monitored', false);
+
+          // Get active week for the specific channel (or global if no channel specified)
+          const activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
+          if (!activeWeek) {
+            await interaction.reply({ content: 'No active voting period. Use `/week start` to begin.', ephemeral: true });
+            return;
+          }
+
+          // Get all shortlisted posts for this week
+          const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
+
+          // Filter posts by week and channel
+          let weekPosts = shortlistedPosts.filter(p => {
+            if (p.weekId !== activeWeek.id) return false;
+            if (monitoredChannel && p.monitoredChannelId !== monitoredChannel.id) return false;
+            return true;
+          });
+
+          if (weekPosts.length === 0) {
+            const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+            await interaction.reply({ content: `No shortlisted posts found${channelInfo} in active week.`, ephemeral: true });
+            return;
+          }
+
+          // Collect all ratings for these posts
+          interface RatingLog {
+            postAuthorId: string;
+            postLink: string;
+            judgeId: string;
+            rating: number;
+            ratedAt: Date;
+          }
+
+          const ratingLogs: RatingLog[] = [];
+
+          for (const post of weekPosts) {
+            const ratings = await prisma.rating.findMany({
+              where: { postId: post.id },
+              include: { user: true },
+              orderBy: { createdAt: 'asc' },
+            });
+
+            for (const rating of ratings) {
+              ratingLogs.push({
+                postAuthorId: post.authorId,
+                postLink: post.link,
+                judgeId: rating.user.discordId,
+                rating: rating.score,
+                ratedAt: rating.createdAt,
+              });
+            }
+          }
+
+          if (ratingLogs.length === 0) {
+            await interaction.reply({ content: 'No ratings found yet. Judges haven\'t started rating posts.', ephemeral: true });
+            return;
+          }
+
+          // Generate CSV
+          const csvRows: string[] = [];
+          csvRows.push('Post Author,Post Link,Judge,Rating,Rated At');
+
+          for (const log of ratingLogs) {
+            const authorMention = `<@${log.postAuthorId}>`;
+            const judgeMention = `<@${log.judgeId}>`;
+            const timestamp = log.ratedAt.toISOString().replace('T', ' ').split('.')[0];
+            csvRows.push(`"${authorMention}","${log.postLink}","${judgeMention}",${log.rating},"${timestamp}"`);
+          }
+
+          const csvContent = csvRows.join('\n');
+          const csvBuffer = Buffer.from(csvContent, 'utf-8');
+
+          // Create filename
+          const startDate = activeWeek.startDate.toISOString().split('T')[0];
+          const channelSuffix = monitoredChannel ? `_${monitoredChannel.id}` : '';
+          const fileName = `rating_logs_${startDate}${channelSuffix}.csv`;
+
+          const attachment = new AttachmentBuilder(csvBuffer, { name: fileName });
+
+          // Log to mod_log
+          await modLogService.log(guildId, ModLogEventType.EXPORT_RESULTS, {
+            weekId: activeWeek.id,
+            adminId: interaction.user.id,
+            postsCount: weekPosts.length,
+            details: `Exported ${ratingLogs.length} rating logs`,
+          });
+
+          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
+          await interaction.reply({
+            content: `📊 **Rating Logs Exported**${channelInfo}\n\nPosts: ${weekPosts.length}\nRatings: ${ratingLogs.length}`,
+            files: [attachment],
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error exporting logs:', error);
+          await modLogService.log(guildId, ModLogEventType.BOT_ERROR, {
+            error: 'Failed to export logs',
+            details: error instanceof Error ? error.message : 'Unknown error',
+          });
+          await interaction.reply({ content: '❌ Failed to export logs. Check mod log for details.', ephemeral: true });
         }
         return;
       }

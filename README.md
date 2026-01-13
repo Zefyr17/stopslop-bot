@@ -1,433 +1,433 @@
 # 🤖 Discord Content Voting Bot
 
-Бот для управления контентом на Discord-сервере с системой голосования сообщества и оценки судей.
+A Discord bot for managing community content with a voting system and judge rating capabilities.
 
-## 📋 Оглавление
+## 📋 Table of Contents
 
-- [Описание](#описание)
-- [Возможности](#возможности)
-- [Установка и настройка](#установка-и-настройка)
-- [Команды бота](#команды-бота)
-- [Рабочий процесс](#рабочий-процесс)
-- [Архитектура](#архитектура)
-
----
-
-## 🎯 Описание
-
-Этот Discord-бот создан для управления процессом отбора контента в сообществе. Он автоматически отслеживает сообщения с ссылками в указанных каналах, позволяет участникам голосовать за лучший контент, а судьям - оценивать отобранные работы.
-
-### Основные этапы работы:
-
-1. **Публикация** - пользователи постят ссылки в отслеживаемых каналах
-2. **Голосование** - сообщество голосует за/против (👍/👎)
-3. **Шорт-лист** - одобренный контент попадает в канал шорт-листа
-4. **Оценка** - судьи ставят оценки от 1 до 10 звезд
-5. **Результаты** - топ-5 работ по средней оценке
+- [Description](#description)
+- [Features](#features)
+- [Installation & Setup](#installation--setup)
+- [Bot Commands](#bot-commands)
+- [Workflow](#workflow)
+- [Architecture](#architecture)
 
 ---
 
-## ✨ Возможности
+## 🎯 Description
 
-### 🔍 Отслеживание контента
-- Автоматическое обнаружение ссылок в сообщениях
-- Защита от дубликатов (умная нормализация ссылок)
-- Поддержка нескольких отслеживаемых каналов
-- Связывание каналов (отслеживаемый → шорт-лист)
+This Discord bot is designed to manage the content selection process in communities. It automatically monitors messages with links in specified channels, allows members to vote for the best content, and enables judges to rate selected submissions.
 
-### 🗳️ Система голосования
-- Бинарное голосование: Да (👍) / Нет (👎)
-- Настраиваемые пороги одобрения/отклонения
-- Приватный подсчет голосов
-- Защита от частой смены голоса (кулдаун 20 секунд)
-- Ограничение голосования по ролям
+### Main Workflow Stages:
 
-### ⭐ Система оценок
-- Оценка от 1 до 10 звезд для шорт-листа
-- Доступ только для судей (настраиваемые роли)
-- Запрет на оценку собственных работ
-- Возможность изменения оценки
-- Расчет средней оценки с учетом предвзятости авторов
-
-### 📊 Недельные периоды
-- Управление голосованием по неделям
-- Независимые периоды для каждого канала
-- Открытие/закрытие периодов голосования
-- Сессии рейтинга для судей
-
-### 🛡️ Модерация
-- Ручное одобрение/отклонение постов администраторами
-- Сброс голосов
-- Детальное логирование в канал мод-логов
-- 11 типов событий с цветными embed-сообщениями
-
-### 📈 Экспорт данных
-- Экспорт логов оценок в CSV
-- Фильтрация по каналам и периодам
-- Включает: автора, ссылку, судью, оценку, время
-
-### 🔐 Управление доступом
-- **Роли избирателей** - кто может голосовать
-- **Роли судей** - кто может оценивать
-- **Роли администраторов** - ручное управление постами
-- Администраторы сервера имеют полный доступ
+1. **Submission** - users post links in monitored channels
+2. **Voting** - community votes yes/no (👍/👎)
+3. **Shortlist** - approved content moves to the shortlist channel
+4. **Rating** - judges rate posts from 1 to 10 stars
+5. **Results** - top 5 posts by average rating
 
 ---
 
-## 🚀 Установка и настройка
+## ✨ Features
 
-### Предварительные требования
+### 🔍 Content Monitoring
+- Automatic link detection in messages
+- Duplicate protection (smart link normalization)
+- Support for multiple monitored channels
+- Channel pairing (monitored → shortlist)
+
+### 🗳️ Voting System
+- Binary voting: Yes (👍) / No (👎)
+- Configurable approval/rejection thresholds
+- Private vote counting
+- Vote change cooldown (20 seconds)
+- Role-based voting restrictions
+
+### ⭐ Rating System
+- 1-10 star rating for shortlisted posts
+- Judge-only access (configurable roles)
+- Cannot rate own posts
+- Rating updates allowed
+- Average rating calculation with author bias normalization
+
+### 📊 Weekly Periods
+- Week-based voting management
+- Independent periods per channel
+- Open/close voting periods
+- Judge rating sessions
+
+### 🛡️ Moderation
+- Manual post approval/rejection by admins
+- Vote reset capability
+- Detailed logging to mod log channel
+- 11 event types with colored embeds
+
+### 📈 Data Export
+- Export rating logs to CSV
+- Filter by channels and periods
+- Includes: author, link, judge, rating, timestamp
+
+### 🔐 Access Control
+- **Voter Roles** - who can vote
+- **Judge Roles** - who can rate
+- **Admin Roles** - manual post management
+- Server administrators have full access
+
+---
+
+## 🚀 Installation & Setup
+
+### Prerequisites
 
 - Node.js 18+
-- PostgreSQL база данных
-- Discord бот токен
+- PostgreSQL database
+- Discord bot token
 
-### 1. Установка зависимостей
+### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Настройка окружения
+### 2. Environment Setup
 
-Создайте файл `.env` в корне проекта:
+Create a `.env` file in the project root:
 
 ```env
 DISCORD_TOKEN=your_discord_bot_token_here
 DATABASE_URL=postgresql://user:password@host:port/database
 ```
 
-### 3. Настройка базы данных
+### 3. Database Setup
 
 ```bash
-# Генерация Prisma клиента
+# Generate Prisma client
 npm run db:generate
 
-# Применение миграций
+# Apply migrations
 npm run db:migrate
 
-# Или для продакшена
+# Or for production
 npm run db:deploy
 ```
 
-### 4. Запуск бота
+### 4. Run the Bot
 
-**Режим разработки:**
+**Development mode:**
 ```bash
 npm run dev
 ```
 
-**Продакшен:**
+**Production:**
 ```bash
 npm run build
 npm start
 ```
 
-### 5. Настройка на сервере Discord
+### 5. Discord Server Configuration
 
-После добавления бота на сервер используйте команды конфигурации:
+After adding the bot to your server, use configuration commands:
 
 ```
-/channel-pair add <отслеживаемый-канал> <канал-шорт-листа>
-/config set-mod-log <канал-для-логов>
-/set-voter-roles <роль1> [роль2] [роль3]
-/set-judge-roles <роль1> [роль2] [роль3]
-/set-thresholds <за> <против>
+/channel-pair add <monitored-channel> <shortlist-channel>
+/config set-mod-log <log-channel>
+/set-voter-roles <role1> [role2] [role3]
+/set-judge-roles <role1> [role2] [role3]
+/set-thresholds <upvotes> <downvotes>
 ```
 
 ---
 
-## 📜 Команды бота
+## 📜 Bot Commands
 
-### 🔧 Служебные команды
+### 🔧 Utility Commands
 
 #### `/ping`
-Проверка работоспособности бота.
+Check bot responsiveness.
 ```
 /ping
 ```
 
 #### `/help`
-Показывает полное руководство по использованию бота, текущую конфигурацию и список всех команд.
+Shows comprehensive bot usage guide, current configuration, and list of all commands.
 ```
 /help
 ```
 
 ---
 
-### ⚙️ Команды конфигурации (требуют права администратора)
+### ⚙️ Configuration Commands (require Administrator permission)
 
 #### `/config show`
-Отображает текущие настройки сервера:
-- Пары каналов
-- Канал мод-логов
-- Роли избирателей/судей/администраторов
-- Пороги голосования
+Displays current server settings:
+- Channel pairs
+- Mod log channel
+- Voter/judge/admin roles
+- Voting thresholds
 
 ```
 /config show
 ```
 
 #### `/config set-mod-log`
-Устанавливает канал для логов модерации.
+Sets the channel for moderation logs.
 ```
 /config set-mod-log channel:#mod-logs
 ```
 
 #### `/config set-admin-roles`
-Назначает роли администраторов (до 3 ролей).
+Assigns admin roles (up to 3 roles).
 ```
 /config set-admin-roles role1:@Admin role2:@Moderator
 ```
 
 ---
 
-### 📢 Управление каналами (администратор)
+### 📢 Channel Management (Administrator)
 
 #### `/channel-pair add`
-Создает связку: отслеживаемый канал → канал шорт-листа.
+Creates a monitored → shortlist channel pair.
 ```
 /channel-pair add monitored:#submissions shortlist:#approved
 ```
 
 #### `/channel-pair remove`
-Удаляет связку каналов.
+Removes a channel pair.
 ```
 /channel-pair remove monitored:#submissions
 ```
 
 #### `/channel-pair list`
-Показывает все настроенные пары каналов.
+Shows all configured channel pairs.
 ```
 /channel-pair list
 ```
 
 ---
 
-### 👥 Настройка ролей (администратор)
+### 👥 Role Configuration (Administrator)
 
 #### `/set-voter-roles`
-Указывает, какие роли могут голосовать (пусто = все).
+Specifies which roles can vote (empty = everyone).
 ```
 /set-voter-roles role1:@Member role2:@Contributor
 ```
 
 #### `/set-judge-roles`
-Указывает, какие роли могут оценивать (пусто = все).
+Specifies which roles can rate (empty = everyone).
 ```
 /set-judge-roles role1:@Judge role2:@Expert
 ```
 
 #### `/set-thresholds`
-Устанавливает пороги голосования.
+Sets voting thresholds.
 ```
 /set-thresholds upvotes:5 downvotes:5
 ```
-- **upvotes** - количество голосов "за" для одобрения
-- **downvotes** - количество голосов "против" для отклонения
+- **upvotes** - votes needed to approve
+- **downvotes** - votes needed to reject
 
 ---
 
-### 📅 Управление периодами голосования (администратор)
+### 📅 Voting Period Management (Administrator)
 
 #### `/week start`
-Начинает новый период голосования.
+Starts a new voting period.
 ```
 /week start [monitored:#channel]
 ```
-- Без параметра: запускает для всех каналов
-- С каналом: запускает только для указанного канала
+- Without parameter: starts for all channels
+- With channel: starts only for specified channel
 
 #### `/week close`
-Закрывает текущий период голосования.
+Closes the current voting period.
 ```
 /week close [monitored:#channel]
 ```
-- Без параметра: закрывает для всех каналов
-- С каналом: закрывает только для указанного канала
+- Without parameter: closes for all channels
+- With channel: closes only for specified channel
 
 ---
 
-### 🏆 Управление рейтингом (администратор)
+### 🏆 Ranking Management (Administrator)
 
 #### `/ranking start`
-Открывает сессию оценки для судей.
+Opens rating session for judges.
 ```
 /ranking start [monitored:#channel]
 ```
-- Позволяет судьям оценивать шорт-лист (1-10 звезд)
+- Allows judges to rate shortlisted posts (1-10 stars)
 
 ---
 
-### 📊 Результаты и экспорт
+### 📊 Results & Export
 
 #### `/results`
-Показывает топ-5 работ текущей недели (только для судей).
+Shows top 5 posts of the current week (judges only).
 ```
 /results [monitored:#channel]
 ```
-- Отображает:
-  - 🥇🥈🥉 Медали для топ-3
-  - Среднюю оценку
-  - Количество голосов
-  - Нормализованный счет (учитывает предвзятость авторов)
+- Displays:
+  - 🥇🥈🥉 Medals for top 3
+  - Average rating
+  - Vote counts
+  - Normalized score (accounting for author bias)
 
 #### `/export logs`
-Экспортирует логи оценок в CSV (только администраторы).
+Exports rating logs to CSV (admins only).
 ```
 /export logs [monitored:#channel]
 ```
-- Содержит: автор, ссылка, судья, оценка, время
-- Имя файла: `rating_logs_YYYY-MM-DD[_CHANNELID].csv`
+- Contains: author, link, judge, rating, timestamp
+- Filename: `rating_logs_YYYY-MM-DD[_CHANNELID].csv`
 
 ---
 
-### 🛠️ Модерация постов (администраторы/судьи)
+### 🛠️ Post Moderation (Admins/Judges)
 
 #### `/post approve`
-Ручное одобрение поста (обход голосования).
+Manually approve a post (bypass voting).
 ```
 /post approve postid:abc123
 ```
-- Меняет статус: PENDING → SHORTLISTED
-- Отключает кнопки голосования
-- Публикует в канал шорт-листа с кнопками оценки
+- Changes status: PENDING → SHORTLISTED
+- Disables voting buttons
+- Posts to shortlist channel with rating buttons
 
 #### `/post reject`
-Ручное отклонение поста.
+Manually reject a post.
 ```
 /post reject postid:abc123
 ```
-- Меняет статус: PENDING/SHORTLISTED → REJECTED
-- Отключает кнопки
+- Changes status: PENDING/SHORTLISTED → REJECTED
+- Disables buttons
 
 #### `/post reset_votes`
-Сбрасывает все голоса по посту.
+Clears all votes on a post.
 ```
 /post reset_votes postid:abc123
 ```
-- Меняет статус: REJECTED/SHORTLISTED → PENDING
-- Включает кнопки голосования заново
+- Changes status: REJECTED/SHORTLISTED → PENDING
+- Re-enables voting buttons
 
 ---
 
-### 🗑️ Управление базой данных (администратор)
+### 🗑️ Database Management (Administrator)
 
 #### `/reset-database`
-⚠️ **ОПАСНО**: Полностью очищает базу данных.
+⚠️ **DANGER**: Completely wipes the database.
 ```
 /reset-database
 ```
-- Удаляет ВСЕ данные: оценки, голоса, посты, недели, пары каналов, конфигурации
-- Требуется ручная переконфигурация после выполнения
+- Deletes ALL data: ratings, votes, posts, weeks, channel pairs, configurations
+- Requires manual reconfiguration afterward
 
 ---
 
-### 💬 Устаревшие текстовые команды
+### 💬 Legacy Text Commands
 
 #### `!ping`
-Устаревшая команда проверки.
+Legacy ping command.
 
 #### `!config`
-Устаревший просмотр конфигурации.
+Legacy configuration display.
 
 #### `!results`
-Устаревший просмотр результатов (требуется роль судьи).
+Legacy results display (requires judge role).
 
 ---
 
-## 🔄 Рабочий процесс
+## 🔄 Workflow
 
-### Жизненный цикл поста
+### Post Lifecycle
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  1. Пользователь постит ссылку                      │
-│     в отслеживаемом канале                          │
+│  1. User posts a link                               │
+│     in monitored channel                            │
 └────────────────┬────────────────────────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────────────────────────┐
-│  2. Бот проверяет на дубликаты                      │
-│     (нормализация ссылок, хеширование)              │
+│  2. Bot checks for duplicates                       │
+│     (link normalization, hashing)                   │
 └────────────┬────────────────────────┬────────────────┘
              │                        │
-     Дубликат │                        │ Новая ссылка
+     Duplicate│                        │ New link
              ▼                        ▼
 ┌─────────────────────┐   ┌──────────────────────────┐
-│  Удаление сообщения │   │  Создание поста          │
-│  + DM уведомление   │   │  Статус: PENDING         │
-│  + Лог в мод-канал  │   │  + Кнопки голосования    │
+│  Delete message     │   │  Create post             │
+│  + DM notification  │   │  Status: PENDING         │
+│  + Log to mod log   │   │  + Voting buttons        │
 └─────────────────────┘   └────────────┬─────────────┘
                                        │
                                        ▼
                      ┌─────────────────────────────────┐
-                     │  3. Голосование сообщества      │
-                     │     👍 За / 👎 Против           │
+                     │  3. Community voting            │
+                     │     👍 Yes / 👎 No              │
                      └──┬──────────────────────────┬───┘
                         │                          │
-      Достигнут порог   │                          │  Достигнут порог
-      отклонения        │                          │  одобрения
+   Rejection threshold  │                          │  Approval threshold
+   reached              │                          │  reached
                         ▼                          ▼
           ┌──────────────────────┐    ┌───────────────────────┐
-          │  Статус: REJECTED    │    │  Статус: SHORTLISTED  │
-          │  Кнопки отключены    │    │  Пост в шорт-листе    │
-          └──────────────────────┘    │  + Кнопки оценки 1-10 │
+          │  Status: REJECTED    │    │  Status: SHORTLISTED  │
+          │  Buttons disabled    │    │  Post to shortlist    │
+          └──────────────────────┘    │  + Rating buttons 1-10│
                                       └───────────┬───────────┘
                                                   │
                                                   ▼
                                       ┌───────────────────────┐
-                                      │  4. Оценка судьями    │
-                                      │     ⭐ 1-10 звезд     │
+                                      │  4. Judge rating      │
+                                      │     ⭐ 1-10 stars     │
                                       └───────────┬───────────┘
                                                   │
                                                   ▼
                                       ┌───────────────────────┐
-                                      │  5. Результаты        │
-                                      │     Топ-5 по оценкам  │
+                                      │  5. Results           │
+                                      │     Top 5 by rating   │
                                       │     🥇🥈🥉            │
                                       └───────────────────────┘
 ```
 
-### Статусы постов
+### Post Statuses
 
-- **PENDING** - ожидает голосования
-- **SHORTLISTED** - одобрено сообществом, ожидает оценки
-- **REJECTED** - отклонено сообществом
+- **PENDING** - awaiting votes
+- **SHORTLISTED** - approved by community, awaiting rating
+- **REJECTED** - rejected by community
 
-### Защита от дубликатов
+### Duplicate Protection
 
-Бот нормализует ссылки перед сохранением, удаляя параметры отслеживания:
-- UTM метки: `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`
-- Tracking коды: `fbclid`, `gclid`, `ref`, `source`, `_ga`, `mc_cid`, `mc_eid`
+The bot normalizes links before saving, removing tracking parameters:
+- UTM tags: `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`
+- Tracking codes: `fbclid`, `gclid`, `ref`, `source`, `_ga`, `mc_cid`, `mc_eid`
 
-Затем создается хеш нормализованной ссылки. При попытке добавить дубликат:
-1. Бот удаляет сообщение
-2. Отправляет DM пользователю с уведомлением
-3. Логирует событие в мод-канал
+A hash is then created from the normalized link. When attempting to add a duplicate:
+1. Bot deletes the message
+2. Sends DM notification to user
+3. Logs event to mod channel
 
 ---
 
-## 🏗️ Архитектура
+## 🏗️ Architecture
 
-### Технологический стек
+### Tech Stack
 
-- **Язык**: TypeScript 5.3.3
+- **Language**: TypeScript 5.3.3
 - **Framework**: discord.js 14.14.1
-- **База данных**: PostgreSQL
+- **Database**: PostgreSQL
 - **ORM**: Prisma 7.2.0
 - **Runtime**: Node.js 18+
 
-### Структура проекта
+### Project Structure
 
 ```
 discordbot/
 ├── src/
-│   ├── bot.ts              # Главный файл с обработчиками событий (1,637 строк)
-│   ├── index.ts            # Точка входа
-│   ├── commands.ts         # Определения slash-команд
-│   ├── db.ts               # Prisma клиент
-│   ├── services/           # Бизнес-логика
+│   ├── bot.ts              # Main file with event handlers (1,637 lines)
+│   ├── index.ts            # Entry point
+│   ├── commands.ts         # Slash command definitions
+│   ├── db.ts               # Prisma client
+│   ├── services/           # Business logic
 │   │   ├── PostService.ts
 │   │   ├── VoteService.ts
 │   │   ├── RatingService.ts
@@ -436,17 +436,17 @@ discordbot/
 │   │   ├── ChannelPairService.ts
 │   │   ├── ModLogService.ts
 │   │   └── ExportService.ts
-│   └── utils/              # Утилиты
+│   └── utils/              # Utilities
 │       ├── linkNormalizer.ts
 │       └── linkDetector.ts
 ├── prisma/
-│   └── schema.prisma       # Схема базы данных
+│   └── schema.prisma       # Database schema
 ├── package.json
 ├── tsconfig.json
-└── .env                    # Переменные окружения (не в репозитории)
+└── .env                    # Environment variables (not in repo)
 ```
 
-### Модели базы данных
+### Database Models
 
 #### User
 ```prisma
@@ -482,7 +482,7 @@ model Week {
 model Post {
   id                  String     @id @default(cuid())
   link                String
-  linkHash            String     @unique  // Защита от дубликатов
+  linkHash            String     @unique  // Duplicate protection
   status              PostStatus @default(PENDING)
   weekId              String
   authorId            String
@@ -509,7 +509,7 @@ model Vote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([postId, userId])  // Один голос на пользователя
+  @@unique([postId, userId])  // One vote per user
 }
 ```
 
@@ -525,7 +525,7 @@ model Rating {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([postId, userId])  // Одна оценка на пользователя
+  @@unique([postId, userId])  // One rating per user
 }
 ```
 
@@ -561,88 +561,88 @@ model ChannelPair {
 }
 ```
 
-### Архитектура сервисов
+### Service Architecture
 
-Бот использует **Service Layer** архитектуру для разделения бизнес-логики:
+The bot uses **Service Layer** architecture to separate business logic:
 
-- **PostService** - управление постами
-- **VoteService** - обработка голосов
-- **RatingService** - управление оценками
-- **WeekService** - управление периодами
-- **GuildConfigService** - конфигурация серверов
-- **ChannelPairService** - связки каналов
-- **ModLogService** - логирование событий
-- **ExportService** - экспорт данных
+- **PostService** - post management
+- **VoteService** - vote processing
+- **RatingService** - rating management
+- **WeekService** - period management
+- **GuildConfigService** - server configuration
+- **ChannelPairService** - channel pairs
+- **ModLogService** - event logging
+- **ExportService** - data export
 
-### События Discord
+### Discord Events
 
-Бот реагирует на следующие события:
+The bot responds to the following events:
 
-1. **ClientReady** - инициализация при запуске
-2. **GuildCreate** - добавление на новый сервер
-3. **MessageCreate** - обработка сообщений с ссылками
-4. **InteractionCreate** - обработка команд и кнопок
+1. **ClientReady** - initialization on startup
+2. **GuildCreate** - added to new server
+3. **MessageCreate** - processing messages with links
+4. **InteractionCreate** - handling commands and buttons
 
-### Типы логов модерации
+### Moderation Log Event Types
 
-| Событие | Цвет | Описание |
-|---------|------|----------|
-| POST_REJECTED_AUTO | 🔴 Красный | Автоматическое отклонение |
-| POST_SHORTLISTED_AUTO | 🟢 Зеленый | Автоматическое одобрение |
-| ADMIN_OVERRIDE_APPROVE | 🟡 Желтый | Ручное одобрение админом |
-| ADMIN_OVERRIDE_REJECT | 🟡 Желтый | Ручное отклонение админом |
-| ADMIN_OVERRIDE_RESET | 🟡 Желтый | Сброс голосов админом |
-| DUPLICATE_LINK_DELETED | 🟠 Оранжевый | Удален дубликат |
-| WEEK_STARTED | 🔵 Синий | Начат новый период |
-| WEEK_CLOSED | 🔵 Синий | Закрыт период |
-| EXPORT_RESULTS | 🟣 Фиолетовый | Экспорт данных |
-| BOT_ERROR | 🔴 Красный | Ошибка бота |
-| RATING_CHANGED | 🟢 Зеленый | Изменена оценка |
-
----
-
-## 📊 Статистика проекта
-
-- **Всего строк кода**: 1,637+ строк
-- **Slash-команд**: 20
-- **Моделей БД**: 7
-- **Типов событий**: 11
-- **Сервисов**: 8
-- **Типов ролей**: 3 (Избиратель, Судья, Администратор)
-- **Статусов постов**: 3 (PENDING, SHORTLISTED, REJECTED)
-- **Шкала оценок**: 1-10 звезд
+| Event | Color | Description |
+|-------|-------|-------------|
+| POST_REJECTED_AUTO | 🔴 Red | Automatic rejection |
+| POST_SHORTLISTED_AUTO | 🟢 Green | Automatic approval |
+| ADMIN_OVERRIDE_APPROVE | 🟡 Yellow | Manual approval by admin |
+| ADMIN_OVERRIDE_REJECT | 🟡 Yellow | Manual rejection by admin |
+| ADMIN_OVERRIDE_RESET | 🟡 Yellow | Vote reset by admin |
+| DUPLICATE_LINK_DELETED | 🟠 Orange | Duplicate deleted |
+| WEEK_STARTED | 🔵 Blue | New period started |
+| WEEK_CLOSED | 🔵 Blue | Period closed |
+| EXPORT_RESULTS | 🟣 Purple | Data export |
+| BOT_ERROR | 🔴 Red | Bot error |
+| RATING_CHANGED | 🟢 Green | Rating changed |
 
 ---
 
-## 🔒 Безопасность
+## 📊 Project Statistics
 
-- Приватный подсчет голосов (не показываются публично)
-- Защита от спама голосами (кулдаун 20 секунд)
-- Race-condition защита при дубликатах (уникальный constraint на linkHash)
-- Права доступа на основе ролей
-- Логирование всех административных действий
-- Защита от SQL-инъекций (через Prisma ORM)
-
----
-
-## 🤝 Вклад в проект
-
-Бот разработан для управления контентом в Discord-сообществах с прозрачной системой голосования и оценки.
+- **Total lines of code**: 1,637+ lines
+- **Slash commands**: 20
+- **Database models**: 7
+- **Event types**: 11
+- **Services**: 8
+- **Role types**: 3 (Voter, Judge, Administrator)
+- **Post statuses**: 3 (PENDING, SHORTLISTED, REJECTED)
+- **Rating scale**: 1-10 stars
 
 ---
 
-## 📝 Лицензия
+## 🔒 Security
+
+- Private vote counting (not shown publicly)
+- Vote spam protection (20-second cooldown)
+- Race-condition protection for duplicates (unique constraint on linkHash)
+- Role-based access control
+- Logging of all administrative actions
+- SQL injection protection (via Prisma ORM)
+
+---
+
+## 🤝 Contributing
+
+This bot is designed for managing content in Discord communities with a transparent voting and rating system.
+
+---
+
+## 📝 License
 
 ISC
 
 ---
 
-## 🆘 Поддержка
+## 🆘 Support
 
-При возникновении проблем проверьте:
-1. Правильность токена Discord и DATABASE_URL в `.env`
-2. Применены ли миграции БД (`npm run db:migrate`)
-3. Есть ли у бота необходимые права на сервере Discord
-4. Настроены ли пары каналов через `/channel-pair add`
+If you encounter issues, check:
+1. Discord token and DATABASE_URL correctness in `.env`
+2. Database migrations applied (`npm run db:migrate`)
+3. Bot has necessary permissions on Discord server
+4. Channel pairs configured via `/channel-pair add`
 
-Для дополнительной помощи обратитесь к логам в консоли или мод-логам на сервере.
+For additional help, refer to console logs or mod logs on the server.

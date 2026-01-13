@@ -5,7 +5,6 @@ import { voteService } from './services/VoteService';
 import { ratingService } from './services/RatingService';
 import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
-import { exportService } from './services/ExportService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
 import { prisma } from './db';
@@ -1417,75 +1416,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
     if (commandName === 'export') {
       const subcommand = interaction.options.getSubcommand();
-
-      if (subcommand === 'results') {
-        try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-          const isCM = config.judgeRoleIds.length === 0 ||
-            config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
-
-          if (!isAdmin && !isCM) {
-            await interaction.reply({ content: '❌ You do not have permission to export results. (Admin or CM role required)', ephemeral: true });
-            return;
-          }
-
-          // Get the last closed week
-          const closedWeek = await weekService.getLastClosedWeek();
-          if (!closedWeek) {
-            await interaction.reply({ content: '❌ No closed weeks found. Please close a week first using /week close.', ephemeral: true });
-            return;
-          }
-
-          // Get results for the closed week
-          const results = await exportService.getWeekResults(closedWeek.id);
-
-          if (results.length === 0) {
-            await interaction.reply({ content: '❌ No shortlisted posts found in the last closed week.', ephemeral: true });
-            return;
-          }
-
-          // Generate CSV
-          const csvContent = exportService.generateCSV(results);
-          const csvBuffer = exportService.createCSVBuffer(csvContent);
-
-          // Create attachment
-          const startDate = closedWeek.startDate.toISOString().split('T')[0];
-          const endDate = closedWeek.endDate.toISOString().split('T')[0];
-          const fileName = `results_${startDate}_to_${endDate}.csv`;
-
-          const attachment = new AttachmentBuilder(csvBuffer, { name: fileName });
-
-          // Log to mod_log
-          await modLogService.log(guildId, ModLogEventType.EXPORT_RESULTS, {
-            weekId: closedWeek.id,
-            adminId: interaction.user.id,
-            postsCount: results.length,
-          });
-
-          await interaction.reply({
-            content: `📊 **Results Exported**\n\nWeek: ${startDate} to ${endDate}\nPosts: ${results.length}`,
-            files: [attachment],
-            ephemeral: true,
-          });
-        } catch (error) {
-          console.error('Error exporting results:', error);
-          await modLogService.log(guildId, ModLogEventType.BOT_ERROR, {
-            error: 'Failed to export results',
-            details: error instanceof Error ? error.message : 'Unknown error',
-          });
-          await interaction.reply({ content: '❌ Failed to export results. Check mod log for details.', ephemeral: true });
-        }
-        return;
-      }
 
       if (subcommand === 'logs') {
         try {

@@ -195,10 +195,6 @@ export const commands = [
     .setDescription('Export commands')
     .addSubcommand(subcommand =>
       subcommand
-        .setName('results')
-        .setDescription('Export results of the last closed week as CSV (Admin only)'))
-    .addSubcommand(subcommand =>
-      subcommand
         .setName('logs')
         .setDescription('Export detailed rating logs for active week (Admin only)')
         .addChannelOption(option =>

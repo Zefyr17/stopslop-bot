@@ -17,7 +17,7 @@ A Discord bot for managing community content with a voting system and judge rati
 
 This Discord bot is designed to manage the content selection process in communities. It automatically monitors messages with links in specified channels, allows members to vote for the best content, and enables judges to rate selected submissions.
 
-### Main Workflow Stages:
+### Main Workflow:
 
 1. **Submission** - users post links in monitored channels
 2. **Voting** - community votes yes/no (👍/👎)

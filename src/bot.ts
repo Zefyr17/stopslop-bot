@@ -1630,6 +1630,109 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
       return;
     }
+
+    if (commandName === 'watch-votes') {
+      try {
+        const config = await guildConfigService.getConfig(guildId);
+        if (!config) {
+          await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+          return;
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        // Get optional monitored channel filter
+        const monitoredChannel = interaction.options.getChannel('monitored', false);
+
+        // Get active week
+        const activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
+        if (!activeWeek) {
+          await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
+          return;
+        }
+
+        // Get all pending posts
+        const pendingPosts = await postService.getPostsByStatus(PostStatus.PENDING);
+
+        // Filter by week and channel
+        let filteredPosts = pendingPosts.filter(p => {
+          if (p.weekId !== activeWeek.id) return false;
+          if (monitoredChannel && p.monitoredChannelId !== monitoredChannel.id) return false;
+          return true;
+        });
+
+        if (filteredPosts.length === 0) {
+          const channelInfo = monitoredChannel ? ` in <#${monitoredChannel.id}>` : '';
+          await interaction.editReply({ content: `No pending posts found${channelInfo} for this week.` });
+          return;
+        }
+
+        // Build embeds for each post
+        const embeds: EmbedBuilder[] = [];
+
+        for (const post of filteredPosts.slice(0, 10)) { // Limit to 10 posts
+          const votes = await voteService.getAllVotesWithUsers(post.id);
+          const voteCounts = await voteService.getVoteCounts(post.id);
+
+          const upvoters = votes
+            .filter(v => v.voteType === 'UP')
+            .map(v => `<@${v.userId}>`)
+            .join(', ') || 'None';
+
+          const downvoters = votes
+            .filter(v => v.voteType === 'DOWN')
+            .map(v => `<@${v.userId}>`)
+            .join(', ') || 'None';
+
+          const timeSincePost = Math.floor((Date.now() - new Date(post.createdAt).getTime()) / 1000 / 60);
+          const timeStr = timeSincePost < 60
+            ? `${timeSincePost}m ago`
+            : `${Math.floor(timeSincePost / 60)}h ${timeSincePost % 60}m ago`;
+
+          const embed = new EmbedBuilder()
+            .setColor(voteCounts.upvotes > voteCounts.downvotes ? 0x00FF00 : voteCounts.downvotes > voteCounts.upvotes ? 0xFF0000 : 0x808080)
+            .setTitle(`Post by <@${post.authorId}>`)
+            .setDescription(`**Link:** ${post.link}\n**Post ID:** \`${post.id}\``)
+            .addFields(
+              {
+                name: `👍 Yes (${voteCounts.upvotes}/${config.upvoteThreshold})`,
+                value: upvoters,
+                inline: true
+              },
+              {
+                name: `👎 No (${voteCounts.downvotes}/${config.downvoteThreshold})`,
+                value: downvoters,
+                inline: true
+              },
+              {
+                name: '⏱️ Posted',
+                value: timeStr,
+                inline: true
+              }
+            )
+            .setFooter({ text: post.monitoredChannelId ? `Channel: #${interaction.guild!.channels.cache.get(post.monitoredChannelId)?.name || post.monitoredChannelId}` : 'Global' });
+
+          embeds.push(embed);
+        }
+
+        const totalPosts = filteredPosts.length;
+        const header = monitoredChannel
+          ? `📊 **Pending Posts in <#${monitoredChannel.id}>** (${totalPosts} total)`
+          : `📊 **All Pending Posts** (${totalPosts} total)`;
+
+        const showingNote = totalPosts > 10 ? `\n_Showing first 10 of ${totalPosts} posts_` : '';
+
+        await interaction.editReply({
+          content: header + showingNote,
+          embeds: embeds,
+        });
+
+      } catch (error) {
+        console.error('Error in watch-votes:', error);
+        await interaction.editReply({ content: '❌ Failed to fetch voting data. Check logs for details.' });
+      }
+      return;
+    }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);
     await interaction.reply({ content: 'An error occurred while processing your command.', ephemeral: true });

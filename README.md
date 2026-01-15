@@ -280,6 +280,19 @@ Exports rating logs to CSV (admins only).
 - Contains: author, link, judge, rating, timestamp
 - Filename: `rating_logs_YYYY-MM-DD[_CHANNELID].csv`
 
+#### `/watch-votes`
+Shows all pending posts with detailed voting information (admins only).
+```
+/watch-votes [monitored:#channel]
+```
+- Displays for each pending post:
+  - Post author and link
+  - Current vote counts vs thresholds
+  - List of users who voted Yes/No
+  - Time since post was created
+- Color-coded: green (more yes), red (more no), gray (equal)
+- Limited to 10 posts per response
+
 ---
 
 ### 🛠️ Post Moderation (Admins/Judges)
@@ -603,8 +616,8 @@ The bot responds to the following events:
 
 ## 📊 Project Statistics
 
-- **Total lines of code**: 1,637+ lines
-- **Slash commands**: 20
+- **Total lines of code**: 1,740+ lines
+- **Slash commands**: 21
 - **Database models**: 7
 - **Event types**: 11
 - **Services**: 8

@@ -207,6 +207,15 @@ export const commands = [
     .setName('reset-database')
     .setDescription('⚠️ DANGER: Reset entire database and config (Admin only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('watch-votes')
+    .setDescription('Show all pending posts with voting details')
+    .addChannelOption(option =>
+      option.setName('monitored')
+        .setDescription('Filter by monitored channel (optional)')
+        .setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

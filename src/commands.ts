@@ -215,6 +215,11 @@ export const commands = [
       option.setName('monitored')
         .setDescription('Filter by monitored channel (optional)')
         .setRequired(false))
+    .addIntegerOption(option =>
+      option.setName('page')
+        .setDescription('Page number (10 posts per page)')
+        .setRequired(false)
+        .setMinValue(1))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 

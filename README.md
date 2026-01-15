@@ -283,7 +283,7 @@ Exports rating logs to CSV (admins only).
 #### `/watch-votes`
 Shows all pending posts with detailed voting information (admins only).
 ```
-/watch-votes [monitored:#channel]
+/watch-votes [monitored:#channel] [page:1]
 ```
 - Displays for each pending post:
   - Post author and link
@@ -291,7 +291,7 @@ Shows all pending posts with detailed voting information (admins only).
   - List of users who voted Yes/No
   - Time since post was created
 - Color-coded: green (more yes), red (more no), gray (equal)
-- Limited to 10 posts per response
+- Paginated: 10 posts per page, use `page` parameter to navigate
 
 ---
 

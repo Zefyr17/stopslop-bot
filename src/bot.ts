@@ -1641,8 +1641,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         await interaction.deferReply({ ephemeral: true });
 
-        // Get optional monitored channel filter
+        // Get optional monitored channel filter and page number
         const monitoredChannel = interaction.options.getChannel('monitored', false);
+        const page = interaction.options.getInteger('page', false) || 1;
+        const postsPerPage = 10;
 
         // Get active week
         const activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
@@ -1661,16 +1663,30 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           return true;
         });
 
-        if (filteredPosts.length === 0) {
+        const totalPosts = filteredPosts.length;
+        const totalPages = Math.ceil(totalPosts / postsPerPage);
+
+        if (totalPosts === 0) {
           const channelInfo = monitoredChannel ? ` in <#${monitoredChannel.id}>` : '';
           await interaction.editReply({ content: `No pending posts found${channelInfo} for this week.` });
           return;
         }
 
+        // Validate page number
+        if (page > totalPages) {
+          await interaction.editReply({ content: `Page ${page} doesn't exist. Total pages: ${totalPages}` });
+          return;
+        }
+
+        // Get posts for current page
+        const startIndex = (page - 1) * postsPerPage;
+        const endIndex = startIndex + postsPerPage;
+        const pagePosts = filteredPosts.slice(startIndex, endIndex);
+
         // Build embeds for each post
         const embeds: EmbedBuilder[] = [];
 
-        for (const post of filteredPosts.slice(0, 10)) { // Limit to 10 posts
+        for (const post of pagePosts) {
           const votes = await voteService.getAllVotesWithUsers(post.id);
           const voteCounts = await voteService.getVoteCounts(post.id);
 
@@ -1715,15 +1731,15 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           embeds.push(embed);
         }
 
-        const totalPosts = filteredPosts.length;
         const header = monitoredChannel
-          ? `📊 **Pending Posts in <#${monitoredChannel.id}>** (${totalPosts} total)`
-          : `📊 **All Pending Posts** (${totalPosts} total)`;
+          ? `📊 **Pending Posts in <#${monitoredChannel.id}>**`
+          : `📊 **All Pending Posts**`;
 
-        const showingNote = totalPosts > 10 ? `\n_Showing first 10 of ${totalPosts} posts_` : '';
+        const pageInfo = `\n📄 Page ${page}/${totalPages} (${totalPosts} total posts)`;
+        const navHint = totalPages > 1 ? `\n_Use \`/watch-votes page:${page < totalPages ? page + 1 : 1}\` for ${page < totalPages ? 'next' : 'first'} page_` : '';
 
         await interaction.editReply({
-          content: header + showingNote,
+          content: header + pageInfo + navHint,
           embeds: embeds,
         });
 

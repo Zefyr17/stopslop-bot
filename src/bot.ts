@@ -1732,10 +1732,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
 
         const header = monitoredChannel
-          ? `📊 **Pending Posts in <#${monitoredChannel.id}>**`
-          : `📊 **All Pending Posts**`;
+          ? `**Pending Posts in <#${monitoredChannel.id}>**`
+          : `**All Pending Posts**`;
 
-        const pageInfo = `\n📄 Page ${page}/${totalPages} (${totalPosts} total posts)`;
+        const pageInfo = `\nPage ${page}/${totalPages} (${totalPosts} total posts)`;
         const navHint = totalPages > 1 ? `\n_Use \`/watch-votes page:${page < totalPages ? page + 1 : 1}\` for ${page < totalPages ? 'next' : 'first'} page_` : '';
 
         await interaction.editReply({

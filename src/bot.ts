@@ -1818,17 +1818,18 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         let nonVoters: string[] = [];
 
         if (voterRoleIds.length > 0) {
-          // Fetch all members with voter roles
-          await guild.members.fetch();
-
-          for (const [memberId, member] of guild.members.cache) {
-            if (member.user.bot) continue;
-
-            const hasVoterRole = voterRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
-            if (hasVoterRole) {
-              eligibleVoters.push(memberId);
-              if (!votersThisWeek.has(memberId)) {
-                nonVoters.push(memberId);
+          // Fetch members for each voter role
+          for (const roleId of voterRoleIds) {
+            const role = guild.roles.cache.get(roleId);
+            if (role) {
+              for (const [memberId, member] of role.members) {
+                if (member.user.bot) continue;
+                if (!eligibleVoters.includes(memberId)) {
+                  eligibleVoters.push(memberId);
+                  if (!votersThisWeek.has(memberId)) {
+                    nonVoters.push(memberId);
+                  }
+                }
               }
             }
           }

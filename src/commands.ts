@@ -229,6 +229,10 @@ export const commands = [
       option.setName('monitored')
         .setDescription('Filter by monitored channel (optional)')
         .setRequired(false))
+    .addRoleOption(option =>
+      option.setName('role')
+        .setDescription('Role to check voting stats for (default: voter roles from config)')
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 

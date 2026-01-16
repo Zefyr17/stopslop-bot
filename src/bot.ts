@@ -1811,18 +1811,19 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           }
         }
 
-        // Get all users with voter roles from the guild
+        // Get all users with specified role (or voter roles from config)
         const guild = interaction.guild!;
-        const voterRoleIds = config.voterRoleIds;
+        const specificRole = interaction.options.getRole('role', false);
+        const roleIdsToCheck = specificRole ? [specificRole.id] : config.voterRoleIds;
 
         let eligibleVoters: string[] = [];
         let nonVoters: string[] = [];
 
-        if (voterRoleIds.length > 0) {
+        if (roleIdsToCheck.length > 0) {
           // Fetch members to ensure cache is complete
           await guild.members.fetch();
 
-          for (const roleId of voterRoleIds) {
+          for (const roleId of roleIdsToCheck) {
             const role = guild.roles.cache.get(roleId);
             if (role) {
               for (const [memberId, member] of role.members) {
@@ -1862,7 +1863,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           );
 
         // Add voter statistics
-        if (voterRoleIds.length > 0) {
+        if (roleIdsToCheck.length > 0) {
           // Voters who have voted (only eligible)
           const eligibleWhoVoted = eligibleVoters.filter(id => votersThisWeek.has(id));
 

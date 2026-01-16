@@ -319,9 +319,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
     }
 
   try {
+    // Immediately acknowledge the interaction to prevent timeout
+    await interaction.deferUpdate();
+
     const config = await guildConfigService.getConfig(guildId);
     if (!config) {
-      await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+      await interaction.followUp({ content: 'Configuration not found.', ephemeral: true });
       return;
     }
 
@@ -329,32 +332,32 @@ bot.on(Events.InteractionCreate, async (interaction) => {
     const hasVoterRole = config.voterRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
 
     if (config.voterRoleIds.length > 0 && !hasVoterRole) {
-      await interaction.reply({ content: '❌ You are not allowed to vote.', ephemeral: true });
+      await interaction.followUp({ content: '❌ You are not allowed to vote.', ephemeral: true });
       return;
     }
 
     const post = await postService.getPostByReviewMessageId(interaction.message.id);
     if (!post) {
-      await interaction.reply({ content: 'Post not found.', ephemeral: true });
+      await interaction.followUp({ content: 'Post not found.', ephemeral: true });
       return;
     }
 
     // Check if the week is closed
     const week = await weekService.getWeekById(post.weekId);
     if (week && week.status === WeekStatus.CLOSED) {
-      await interaction.reply({ content: '❌ Cannot vote on posts from a closed week.', ephemeral: true });
+      await interaction.followUp({ content: '❌ Cannot vote on posts from a closed week.', ephemeral: true });
       return;
     }
 
     if (post.status !== PostStatus.PENDING) {
-      await interaction.reply({ content: 'This post has already been decided.', ephemeral: true });
+      await interaction.followUp({ content: 'This post has already been decided.', ephemeral: true });
       return;
     }
 
     // Check cooldown for vote changes
     const cooldownCheck = await voteService.canUserChangeVote(post.id, interaction.user.id, 20);
     if (!cooldownCheck.canChange) {
-      await interaction.reply({
+      await interaction.followUp({
         content: `❌ You can change your vote again in ${cooldownCheck.secondsRemaining} second${cooldownCheck.secondsRemaining !== 1 ? 's' : ''}.`,
         ephemeral: true
       });
@@ -456,7 +459,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
       // Show confirmation to voter
       const voteMessage = voteType === VoteType.UP ? 'You voted Yes.' : 'You voted No.';
-      await interaction.reply({
+      await interaction.followUp({
         content: voteMessage,
         ephemeral: true
       });
@@ -477,14 +480,19 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
       // Show confirmation to voter
       const voteMessage = voteType === VoteType.UP ? 'You voted Yes.' : 'You voted No.';
-      await interaction.reply({
+      await interaction.followUp({
         content: voteMessage,
         ephemeral: true
       });
     }
     } catch (error) {
       console.error('Error processing vote:', error);
-      await interaction.reply({ content: 'Failed to process vote.', ephemeral: true });
+      // Don't try to reply if interaction already acknowledged
+      try {
+        await interaction.followUp({ content: 'Failed to process vote.', ephemeral: true });
+      } catch (followUpError) {
+        console.error('Failed to send error followUp:', followUpError);
+      }
     }
   }
 
@@ -492,9 +500,12 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
 async function handleRateButton(interaction: ButtonInteraction, guildId: string) {
   try {
+    // Immediately acknowledge the interaction to prevent timeout
+    await interaction.deferUpdate();
+
     const config = await guildConfigService.getConfig(guildId);
     if (!config) {
-      await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+      await interaction.followUp({ content: 'Configuration not found.', ephemeral: true });
       return;
     }
 
@@ -503,14 +514,14 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
 
     if (!hasJudgeRole) {
-      await interaction.reply({ content: '❌ You are not allowed to rate posts.', ephemeral: true });
+      await interaction.followUp({ content: '❌ You are not allowed to rate posts.', ephemeral: true });
       return;
     }
 
     // Extract postId and rating from customId: rate_POSTID_RATING
     const parts = interaction.customId.split('_');
     if (parts.length < 3) {
-      await interaction.reply({ content: '❌ Invalid button format.', ephemeral: true });
+      await interaction.followUp({ content: '❌ Invalid button format.', ephemeral: true });
       return;
     }
 
@@ -518,38 +529,38 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
     const postId = parts.slice(1, -1).join('_'); // Handle post IDs that might contain underscores
 
     if (isNaN(rating) || rating < 1 || rating > 10) {
-      await interaction.reply({ content: '❌ Invalid rating value.', ephemeral: true });
+      await interaction.followUp({ content: '❌ Invalid rating value.', ephemeral: true });
       return;
     }
 
     const post = await postService.getPostById(postId);
 
     if (!post) {
-      await interaction.reply({ content: 'Post not found.', ephemeral: true });
+      await interaction.followUp({ content: 'Post not found.', ephemeral: true });
       return;
     }
 
     // Check if the week is closed
     const week = await weekService.getWeekById(post.weekId);
     if (week && week.status === WeekStatus.CLOSED) {
-      await interaction.reply({ content: '❌ Cannot rate posts from a closed week.', ephemeral: true });
+      await interaction.followUp({ content: '❌ Cannot rate posts from a closed week.', ephemeral: true });
       return;
     }
 
     // Check if ranking is open
     if (week && !week.rankingOpen) {
-      await interaction.reply({ content: 'Admin has not started ranking session yet.', ephemeral: true });
+      await interaction.followUp({ content: 'Admin has not started ranking session yet.', ephemeral: true });
       return;
     }
 
     if (post.status !== PostStatus.SHORTLISTED) {
-      await interaction.reply({ content: 'Only shortlisted posts can be rated.', ephemeral: true });
+      await interaction.followUp({ content: 'Only shortlisted posts can be rated.', ephemeral: true });
       return;
     }
 
     // Check if user is trying to rate their own post
     if (post.authorId === interaction.user.id) {
-      await interaction.reply({ content: 'You cannot rate your own post.', ephemeral: true });
+      await interaction.followUp({ content: 'You cannot rate your own post.', ephemeral: true });
       return;
     }
 
@@ -567,13 +578,17 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       message = `You rated this post ${rating}/10`;
     }
 
-    await interaction.reply({
+    await interaction.followUp({
       content: message,
       ephemeral: true,
     });
   } catch (error) {
     console.error('Error processing rating:', error);
-    await interaction.reply({ content: 'Failed to save rating.', ephemeral: true });
+    try {
+      await interaction.followUp({ content: 'Failed to save rating.', ephemeral: true });
+    } catch (followUpError) {
+      console.error('Failed to send error followUp:', followUpError);
+    }
   }
 }
 

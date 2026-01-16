@@ -1818,7 +1818,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         let nonVoters: string[] = [];
 
         if (voterRoleIds.length > 0) {
-          // Fetch members for each voter role
+          // Fetch all members to ensure cache is populated
+          await guild.members.fetch();
+
           for (const roleId of voterRoleIds) {
             const role = guild.roles.cache.get(roleId);
             if (role) {

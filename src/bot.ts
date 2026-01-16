@@ -14,6 +14,7 @@ export const bot = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -1818,9 +1819,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         let nonVoters: string[] = [];
 
         if (voterRoleIds.length > 0) {
-          // Fetch all members to ensure cache is populated
-          await guild.members.fetch();
-
+          // Use role.members from cache (requires GuildMembers intent)
           for (const roleId of voterRoleIds) {
             const role = guild.roles.cache.get(roleId);
             if (role) {

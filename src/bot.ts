@@ -1819,7 +1819,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         let nonVoters: string[] = [];
 
         if (voterRoleIds.length > 0) {
-          // Use role.members from cache (requires GuildMembers intent)
+          // Fetch members to ensure cache is complete
+          await guild.members.fetch();
+
           for (const roleId of voterRoleIds) {
             const role = guild.roles.cache.get(roleId);
             if (role) {
@@ -1827,11 +1829,15 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 if (member.user.bot) continue;
                 if (!eligibleVoters.includes(memberId)) {
                   eligibleVoters.push(memberId);
-                  if (!votersThisWeek.has(memberId)) {
-                    nonVoters.push(memberId);
-                  }
                 }
               }
+            }
+          }
+
+          // Filter: who voted and who didn't (only from eligible voters)
+          for (const oderId of eligibleVoters) {
+            if (!votersThisWeek.has(oderId)) {
+              nonVoters.push(oderId);
             }
           }
         }
@@ -1851,60 +1857,76 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 `Shortlisted: **${shortlistedCount}**`,
                 `Rejected: **${rejectedCount}**`
               ].join('\n'),
-              inline: true
+              inline: false
             }
           );
 
-        // Add voter statistics if voter roles are configured
+        // Add voter statistics
         if (voterRoleIds.length > 0) {
-          embed.addFields(
-            {
-              name: 'Voter Activity',
-              value: [
-                `Eligible voters: **${eligibleVoters.length}**`,
-                `Voted this week: **${votersThisWeek.size}**`,
-                `Not voted yet: **${nonVoters.length}**`
-              ].join('\n'),
-              inline: true
-            }
-          );
+          // Voters who have voted (only eligible)
+          const eligibleWhoVoted = eligibleVoters.filter(id => votersThisWeek.has(id));
 
-          // List who voted
-          if (votersThisWeek.size > 0) {
-            const votersList = Array.from(votersThisWeek)
-              .slice(0, 20)
+          if (eligibleWhoVoted.length > 0) {
+            const votersList = eligibleWhoVoted
+              .slice(0, 25)
               .map(id => `<@${id}>`)
               .join(', ');
 
-            const moreVoters = votersThisWeek.size > 20 ? `\n... and ${votersThisWeek.size - 20} more` : '';
+            const more = eligibleWhoVoted.length > 25 ? `\n... and ${eligibleWhoVoted.length - 25} more` : '';
 
             embed.addFields({
-              name: `Voted (${votersThisWeek.size})`,
-              value: votersList + moreVoters || 'None',
+              name: `Voted (${eligibleWhoVoted.length})`,
+              value: votersList + more,
+              inline: false
+            });
+          } else {
+            embed.addFields({
+              name: 'Voted (0)',
+              value: 'No one yet',
               inline: false
             });
           }
 
-          // List who hasn't voted
+          // Voters who haven't voted
           if (nonVoters.length > 0) {
             const nonVotersList = nonVoters
-              .slice(0, 20)
+              .slice(0, 25)
               .map(id => `<@${id}>`)
               .join(', ');
 
-            const moreNonVoters = nonVoters.length > 20 ? `\n... and ${nonVoters.length - 20} more` : '';
+            const more = nonVoters.length > 25 ? `\n... and ${nonVoters.length - 25} more` : '';
 
             embed.addFields({
               name: `Not Voted Yet (${nonVoters.length})`,
-              value: nonVotersList + moreNonVoters || 'None',
+              value: nonVotersList + more,
+              inline: false
+            });
+          } else {
+            embed.addFields({
+              name: 'Not Voted Yet (0)',
+              value: 'Everyone voted!',
               inline: false
             });
           }
         } else {
+          // No voter roles configured - just show who voted
+          if (votersThisWeek.size > 0) {
+            const votersList = Array.from(votersThisWeek)
+              .slice(0, 25)
+              .map(id => `<@${id}>`)
+              .join(', ');
+
+            embed.addFields({
+              name: `Voted (${votersThisWeek.size})`,
+              value: votersList,
+              inline: false
+            });
+          }
+
           embed.addFields({
-            name: 'Voter Activity',
-            value: `Voted this week: **${votersThisWeek.size}** users\n\n_Set voter roles with \`/set-voter-roles\` to track who hasn't voted._`,
-            inline: true
+            name: 'Note',
+            value: '_Set voter roles with `/set-voter-roles` to track who hasn\'t voted._',
+            inline: false
           });
         }
 

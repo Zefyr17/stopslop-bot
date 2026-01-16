@@ -221,6 +221,15 @@ export const commands = [
         .setRequired(false)
         .setMinValue(1))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('stats')
+    .setDescription('Show voting statistics for current week')
+    .addChannelOption(option =>
+      option.setName('monitored')
+        .setDescription('Filter by monitored channel (optional)')
+        .setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

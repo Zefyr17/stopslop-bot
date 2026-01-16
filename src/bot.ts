@@ -1764,6 +1764,161 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
       return;
     }
+
+    if (commandName === 'stats') {
+      try {
+        const config = await guildConfigService.getConfig(guildId);
+        if (!config) {
+          await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+          return;
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        // Get optional monitored channel filter
+        const monitoredChannel = interaction.options.getChannel('monitored', false);
+
+        // Get active week
+        const activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
+        if (!activeWeek) {
+          await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
+          return;
+        }
+
+        // Get all posts for this week
+        const allPosts = await postService.getPostsByWeek(activeWeek.id);
+
+        // Filter by channel if specified
+        const filteredPosts = monitoredChannel
+          ? allPosts.filter(p => p.monitoredChannelId === monitoredChannel.id)
+          : allPosts;
+
+        // Count posts by status
+        const pendingCount = filteredPosts.filter(p => p.status === PostStatus.PENDING).length;
+        const shortlistedCount = filteredPosts.filter(p => p.status === PostStatus.SHORTLISTED).length;
+        const rejectedCount = filteredPosts.filter(p => p.status === PostStatus.REJECTED).length;
+        const totalCount = filteredPosts.length;
+
+        // Get all votes for this week's posts
+        const allVoterIds = new Set<string>();
+        const votersThisWeek = new Set<string>();
+
+        for (const post of filteredPosts) {
+          const votes = await voteService.getAllVotesWithUsers(post.id);
+          for (const vote of votes) {
+            votersThisWeek.add(vote.userId);
+          }
+        }
+
+        // Get all users with voter roles from the guild
+        const guild = interaction.guild!;
+        const voterRoleIds = config.voterRoleIds;
+
+        let eligibleVoters: string[] = [];
+        let nonVoters: string[] = [];
+
+        if (voterRoleIds.length > 0) {
+          // Fetch all members with voter roles
+          await guild.members.fetch();
+
+          for (const [memberId, member] of guild.members.cache) {
+            if (member.user.bot) continue;
+
+            const hasVoterRole = voterRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
+            if (hasVoterRole) {
+              eligibleVoters.push(memberId);
+              if (!votersThisWeek.has(memberId)) {
+                nonVoters.push(memberId);
+              }
+            }
+          }
+        }
+
+        // Build the embed
+        const channelInfo = monitoredChannel ? ` (<#${monitoredChannel.id}>)` : '';
+
+        const embed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle(`Statistics${channelInfo}`)
+          .addFields(
+            {
+              name: 'Posts Overview',
+              value: [
+                `Total: **${totalCount}**`,
+                `Pending: **${pendingCount}**`,
+                `Shortlisted: **${shortlistedCount}**`,
+                `Rejected: **${rejectedCount}**`
+              ].join('\n'),
+              inline: true
+            }
+          );
+
+        // Add voter statistics if voter roles are configured
+        if (voterRoleIds.length > 0) {
+          embed.addFields(
+            {
+              name: 'Voter Activity',
+              value: [
+                `Eligible voters: **${eligibleVoters.length}**`,
+                `Voted this week: **${votersThisWeek.size}**`,
+                `Not voted yet: **${nonVoters.length}**`
+              ].join('\n'),
+              inline: true
+            }
+          );
+
+          // List who voted
+          if (votersThisWeek.size > 0) {
+            const votersList = Array.from(votersThisWeek)
+              .slice(0, 20)
+              .map(id => `<@${id}>`)
+              .join(', ');
+
+            const moreVoters = votersThisWeek.size > 20 ? `\n... and ${votersThisWeek.size - 20} more` : '';
+
+            embed.addFields({
+              name: `Voted (${votersThisWeek.size})`,
+              value: votersList + moreVoters || 'None',
+              inline: false
+            });
+          }
+
+          // List who hasn't voted
+          if (nonVoters.length > 0) {
+            const nonVotersList = nonVoters
+              .slice(0, 20)
+              .map(id => `<@${id}>`)
+              .join(', ');
+
+            const moreNonVoters = nonVoters.length > 20 ? `\n... and ${nonVoters.length - 20} more` : '';
+
+            embed.addFields({
+              name: `Not Voted Yet (${nonVoters.length})`,
+              value: nonVotersList + moreNonVoters || 'None',
+              inline: false
+            });
+          }
+        } else {
+          embed.addFields({
+            name: 'Voter Activity',
+            value: `Voted this week: **${votersThisWeek.size}** users\n\n_Set voter roles with \`/set-voter-roles\` to track who hasn't voted._`,
+            inline: true
+          });
+        }
+
+        // Add week info
+        const startDate = activeWeek.startDate.toISOString().split('T')[0];
+        embed.setFooter({ text: `Week started: ${startDate}` });
+        embed.setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+
+      } catch (error) {
+        console.error('Error in stats:', error);
+        await interaction.editReply({ content: 'Failed to fetch statistics. Check logs for details.' });
+      }
+      return;
+    }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);
     await interaction.reply({ content: 'An error occurred while processing your command.', ephemeral: true });

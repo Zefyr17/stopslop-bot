@@ -1931,6 +1931,67 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           });
         }
 
+        // Add ranking statistics (who rated shortlisted posts)
+        if (shortlistedCount > 0 && roleIdsToCheck.length > 0) {
+          const ratersThisWeek = new Set<string>();
+          const shortlistedPosts = filteredPosts.filter(p => p.status === PostStatus.SHORTLISTED);
+
+          for (const post of shortlistedPosts) {
+            const ratings = await prisma.rating.findMany({
+              where: { postId: post.id },
+              include: { user: true }
+            });
+            for (const rating of ratings) {
+              ratersThisWeek.add(rating.user.discordId);
+            }
+          }
+
+          const eligibleWhoRated = eligibleVoters.filter(id => ratersThisWeek.has(id));
+          const nonRaters = eligibleVoters.filter(id => !ratersThisWeek.has(id));
+
+          if (eligibleWhoRated.length > 0) {
+            const ratersList = eligibleWhoRated
+              .slice(0, 25)
+              .map(id => `<@${id}>`)
+              .join(', ');
+
+            const more = eligibleWhoRated.length > 25 ? `\n... and ${eligibleWhoRated.length - 25} more` : '';
+
+            embed.addFields({
+              name: `Ranked Posts (${eligibleWhoRated.length})`,
+              value: ratersList + more,
+              inline: false
+            });
+          } else {
+            embed.addFields({
+              name: 'Ranked Posts (0)',
+              value: 'No one yet',
+              inline: false
+            });
+          }
+
+          if (nonRaters.length > 0) {
+            const nonRatersList = nonRaters
+              .slice(0, 25)
+              .map(id => `<@${id}>`)
+              .join(', ');
+
+            const more = nonRaters.length > 25 ? `\n... and ${nonRaters.length - 25} more` : '';
+
+            embed.addFields({
+              name: `Not Ranked Yet (${nonRaters.length})`,
+              value: nonRatersList + more,
+              inline: false
+            });
+          } else {
+            embed.addFields({
+              name: 'Not Ranked Yet (0)',
+              value: 'Everyone ranked!',
+              inline: false
+            });
+          }
+        }
+
         // Add week info
         const startDate = activeWeek.startDate.toISOString().split('T')[0];
         embed.setFooter({ text: `Week started: ${startDate}` });

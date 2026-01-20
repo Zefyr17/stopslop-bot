@@ -922,48 +922,23 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
-      // Count total judges
-      const totalJudges = config.judgeRoleIds.length > 0 ? config.judgeRoleIds.length : 0;
-
       const postsWithRatings = await Promise.all(
         weekPosts.map(async (post) => {
           const stats = await ratingService.getPostRatingStats(post.id);
-
-          // Check if post author is a judge
-          let isAuthorJudge = false;
-          if (totalJudges > 0) {
-            try {
-              const authorMember = await interaction.guild!.members.fetch(post.authorId);
-              isAuthorJudge = config.judgeRoleIds.some((roleId: string) =>
-                authorMember.roles.cache.has(roleId)
-              );
-            } catch {
-              // If can't fetch member, assume not a judge
-              isAuthorJudge = false;
-            }
-          }
-
-          // Calculate expected votes
-          const expectedVotes = isAuthorJudge && totalJudges > 0
-            ? totalJudges - 1  // Author is judge, shouldn't vote for self
-            : totalJudges;      // Author is not judge, all should vote
-
-          // Calculate normalized score for fair comparison
-          const normalizedScore = expectedVotes > 0
-            ? stats.averageRating * (stats.totalRatings / expectedVotes)
-            : stats.averageRating;
-
           return {
             post,
             stats,
-            expectedVotes,
-            normalizedScore,
           };
         })
       );
 
-      // Sort by normalized score instead of just average rating
-      postsWithRatings.sort((a, b) => b.normalizedScore - a.normalizedScore);
+      // Sort by average rating (highest first), then by number of ratings as tiebreaker
+      postsWithRatings.sort((a, b) => {
+        if (b.stats.averageRating !== a.stats.averageRating) {
+          return b.stats.averageRating - a.stats.averageRating;
+        }
+        return b.stats.totalRatings - a.stats.totalRatings;
+      });
 
       const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
 

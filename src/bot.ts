@@ -873,9 +873,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'results') {
+      // Defer reply immediately to prevent timeout
+      await interaction.deferReply();
+
       const config = await guildConfigService.getConfig(guildId);
       if (!config) {
-        await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+        await interaction.editReply({ content: 'Configuration not found.' });
         return;
       }
 
@@ -884,7 +887,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
 
       if (!hasJudgeRole) {
-        await interaction.reply({ content: '❌ You do not have permission to view results.', ephemeral: true });
+        await interaction.editReply({ content: '❌ You do not have permission to view results.' });
         return;
       }
 
@@ -894,7 +897,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       // Get active week for the specific channel (or global if no channel specified)
       const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek(monitoredChannel?.id);
       if (!activeWeek) {
-        await interaction.reply({ content: 'No active voting period. Use `/week start` to begin accepting posts.', ephemeral: true });
+        await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
         return;
       }
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
@@ -914,11 +917,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       if (monitoredChannel) {
 
         if (weekPosts.length === 0) {
-          await interaction.reply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> this week.`, ephemeral: true });
+          await interaction.editReply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> this week.` });
           return;
         }
       } else if (weekPosts.length === 0) {
-        await interaction.reply({ content: 'No shortlisted posts found for this week.', ephemeral: true });
+        await interaction.editReply({ content: 'No shortlisted posts found for this week.' });
         return;
       }
 
@@ -1001,7 +1004,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         .setDescription(resultLines.join('\n'))
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
       return;
     }
 

@@ -17,6 +17,7 @@ export class VoteService {
       dbUser = await prisma.user.create({
         data: { discordId: userId },
       });
+      console.log(`[Vote] Created new user: ${userId}`);
     }
 
     // Check if user already voted
@@ -31,7 +32,7 @@ export class VoteService {
 
     if (existingVote) {
       // Update existing vote
-      return prisma.vote.update({
+      const updated = await prisma.vote.update({
         where: {
           postId_userId: {
             postId,
@@ -40,16 +41,20 @@ export class VoteService {
         },
         data: { type },
       });
+      console.log(`[Vote] Updated vote for user ${userId} on post ${postId}: ${existingVote.type} -> ${type}`);
+      return updated;
     }
 
     // Create new vote
-    return prisma.vote.create({
+    const created = await prisma.vote.create({
       data: {
         postId,
         userId: dbUser.id,
         type,
       },
     });
+    console.log(`[Vote] Created new vote for user ${userId} on post ${postId}: ${type}`);
+    return created;
   }
 
   async getVoteCounts(postId: string): Promise<VoteCounts> {
@@ -138,6 +143,9 @@ export class VoteService {
       where: { postId },
       include: {
         user: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
       },
     });
 

@@ -369,6 +369,14 @@ bot.on(Events.InteractionCreate, async (interaction) => {
 
     await voteService.recordVote(post.id, interaction.user.id, voteType);
 
+    // Verify vote was actually recorded
+    const verifyVote = await voteService.getUserVote(post.id, interaction.user.id);
+    if (!verifyVote || verifyVote.type !== voteType) {
+      console.error(`[Vote] VERIFICATION FAILED for user ${interaction.user.id} on post ${post.id}. Expected: ${voteType}, Got: ${verifyVote?.type || 'null'}`);
+      await interaction.followUp({ content: '❌ Vote verification failed. Please try again.', ephemeral: true });
+      return;
+    }
+
     const voteCounts = await voteService.getVoteCounts(post.id);
 
     let statusChanged = false;

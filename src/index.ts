@@ -14,10 +14,11 @@ async function main() {
     }
 
     console.log('Token found, attempting login...');
+    console.log('Token preview:', token.substring(0, 20) + '...');
 
-    // Add timeout to login attempt
+    // Add timeout to login attempt (increased to 60s)
     const loginTimeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Login timeout after 30 seconds')), 30000)
+      setTimeout(() => reject(new Error('Login timeout after 60 seconds')), 60000)
     );
 
     await Promise.race([

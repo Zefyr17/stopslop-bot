@@ -18,6 +18,21 @@ export const bot = new Client({
   ],
 });
 
+// Add debug event listeners
+bot.on('debug', (info) => {
+  if (info.includes('Session') || info.includes('Heartbeat') || info.includes('READY') || info.includes('Gateway')) {
+    console.log('[Discord Debug]', info);
+  }
+});
+
+bot.on('warn', (info) => {
+  console.warn('[Discord Warn]', info);
+});
+
+bot.on('error', (error) => {
+  console.error('[Discord Error]', error);
+});
+
 bot.once(Events.ClientReady, async (client) => {
   console.log(`Ready! Logged in as ${client.user.tag}`);
 

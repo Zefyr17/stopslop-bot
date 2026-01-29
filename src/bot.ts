@@ -16,13 +16,17 @@ export const bot = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
+  ws: {
+    large_threshold: 50,
+  },
+  rest: {
+    timeout: 60000, // 60 seconds
+  },
 });
 
-// Add debug event listeners
+// Add debug event listeners - log everything in production
 bot.on('debug', (info) => {
-  if (info.includes('Session') || info.includes('Heartbeat') || info.includes('READY') || info.includes('Gateway')) {
-    console.log('[Discord Debug]', info);
-  }
+  console.log('[Discord Debug]', info);
 });
 
 bot.on('warn', (info) => {

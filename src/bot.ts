@@ -172,15 +172,21 @@ bot.on(Events.MessageCreate, async (message) => {
         return;
       }
 
-      const postsWithRatings = await Promise.all(
-        weekPosts.map(async (post) => {
-          const stats = await ratingService.getPostRatingStats(post.id);
-          return {
-            post,
-            stats,
-          };
-        })
-      );
+      // Fetch all ratings in a single query to avoid N+1 problem
+      const postIds = weekPosts.map(p => p.id);
+      const statsMap = await ratingService.getBulkPostRatingStats(postIds);
+
+      const postsWithRatings = weekPosts.map((post) => {
+        const stats = statsMap.get(post.id) || {
+          postId: post.id,
+          averageRating: 0,
+          totalRatings: 0,
+        };
+        return {
+          post,
+          stats,
+        };
+      });
 
       postsWithRatings.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
 
@@ -192,13 +198,50 @@ bot.on(Events.MessageCreate, async (message) => {
         return `${medal} **${avgRating} ⭐** (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})\n${item.post.link}\nBy <@${item.post.authorId}>`;
       });
 
-      const embed = new EmbedBuilder()
-        .setColor(0xffd700)
-        .setTitle('🏆 Weekly Results')
-        .setDescription(resultLines.join('\n\n'))
-        .setTimestamp();
+      // Split into multiple embeds if needed (Discord limit: 4096 chars per embed description)
+      const embeds: EmbedBuilder[] = [];
+      let currentLines: string[] = [];
+      let currentLength = 0;
+      const MAX_LENGTH = 4000; // Leave some buffer
 
-      await message.reply({ embeds: [embed] });
+      for (const line of resultLines) {
+        const lineLength = line.length + 2; // +2 for double newline separator
+
+        if (currentLength + lineLength > MAX_LENGTH && currentLines.length > 0) {
+          // Create embed with current lines
+          const embed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setDescription(currentLines.join('\n\n'))
+            .setTimestamp();
+
+          if (embeds.length === 0) {
+            embed.setTitle('🏆 Weekly Results');
+          }
+
+          embeds.push(embed);
+          currentLines = [];
+          currentLength = 0;
+        }
+
+        currentLines.push(line);
+        currentLength += lineLength;
+      }
+
+      // Add remaining lines
+      if (currentLines.length > 0) {
+        const embed = new EmbedBuilder()
+          .setColor(0xffd700)
+          .setDescription(currentLines.join('\n\n'))
+          .setTimestamp();
+
+        if (embeds.length === 0) {
+          embed.setTitle('🏆 Weekly Results');
+        }
+
+        embeds.push(embed);
+      }
+
+      await message.reply({ embeds });
     } catch (error) {
       console.error('Error fetching results:', error);
       await message.reply('Failed to fetch results.');
@@ -952,15 +995,21 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
-      const postsWithRatings = await Promise.all(
-        weekPosts.map(async (post) => {
-          const stats = await ratingService.getPostRatingStats(post.id);
-          return {
-            post,
-            stats,
-          };
-        })
-      );
+      // Fetch all ratings in a single query to avoid N+1 problem
+      const postIds = weekPosts.map(p => p.id);
+      const statsMap = await ratingService.getBulkPostRatingStats(postIds);
+
+      const postsWithRatings = weekPosts.map((post) => {
+        const stats = statsMap.get(post.id) || {
+          postId: post.id,
+          averageRating: 0,
+          totalRatings: 0,
+        };
+        return {
+          post,
+          stats,
+        };
+      });
 
       // Sort by average rating (highest first), then by number of ratings as tiebreaker
       postsWithRatings.sort((a, b) => {
@@ -1024,14 +1073,50 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       resultLines.push('Thank you all for your contributions ✨');
 
-      // Create embed
-      const embed = new EmbedBuilder()
-        .setColor(0xffd700)
-        .setTitle(title)
-        .setDescription(resultLines.join('\n'))
-        .setTimestamp();
+      // Split into multiple embeds if needed (Discord limit: 4096 chars per embed description)
+      const embeds: EmbedBuilder[] = [];
+      let currentLines: string[] = [];
+      let currentLength = 0;
+      const MAX_LENGTH = 4000; // Leave some buffer
 
-      await interaction.editReply({ embeds: [embed] });
+      for (const line of resultLines) {
+        const lineLength = line.length + 1; // +1 for newline
+
+        if (currentLength + lineLength > MAX_LENGTH && currentLines.length > 0) {
+          // Create embed with current lines
+          const embed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setDescription(currentLines.join('\n'))
+            .setTimestamp();
+
+          if (embeds.length === 0) {
+            embed.setTitle(title);
+          }
+
+          embeds.push(embed);
+          currentLines = [];
+          currentLength = 0;
+        }
+
+        currentLines.push(line);
+        currentLength += lineLength;
+      }
+
+      // Add remaining lines
+      if (currentLines.length > 0) {
+        const embed = new EmbedBuilder()
+          .setColor(0xffd700)
+          .setDescription(currentLines.join('\n'))
+          .setTimestamp();
+
+        if (embeds.length === 0) {
+          embed.setTitle(title);
+        }
+
+        embeds.push(embed);
+      }
+
+      await interaction.editReply({ embeds });
       return;
     }
 

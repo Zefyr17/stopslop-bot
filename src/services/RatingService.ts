@@ -94,6 +94,43 @@ export class RatingService {
       totalRatings,
     };
   }
+
+  async getBulkPostRatingStats(postIds: string[]): Promise<Map<string, PostRatingStats>> {
+    if (postIds.length === 0) {
+      return new Map();
+    }
+
+    // Fetch all ratings for all posts in a single query
+    const ratings = await prisma.rating.findMany({
+      where: { postId: { in: postIds } },
+    });
+
+    // Group ratings by postId
+    const ratingsByPost = new Map<string, number[]>();
+    for (const rating of ratings) {
+      const scores = ratingsByPost.get(rating.postId) || [];
+      scores.push(rating.score);
+      ratingsByPost.set(rating.postId, scores);
+    }
+
+    // Calculate stats for each post
+    const statsMap = new Map<string, PostRatingStats>();
+    for (const postId of postIds) {
+      const scores = ratingsByPost.get(postId) || [];
+      const totalRatings = scores.length;
+      const averageRating = totalRatings > 0
+        ? scores.reduce((acc, score) => acc + score, 0) / totalRatings
+        : 0;
+
+      statsMap.set(postId, {
+        postId,
+        averageRating,
+        totalRatings,
+      });
+    }
+
+    return statsMap;
+  }
 }
 
 export const ratingService = new RatingService();

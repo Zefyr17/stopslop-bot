@@ -104,6 +104,7 @@ model GuildConfig {
   adminRoleIds         String[]      @default([])
   upvoteThreshold      Int           @default(5)
   downvoteThreshold    Int           @default(5)
+  defaultPostLimit     Int           @default(3)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 }
@@ -118,4 +119,17 @@ model ChannelPair {
   updatedAt           DateTime    @updatedAt
 
   @@unique([guildConfigId, monitoredChannelId])
+}
+
+// Tracks spam penalties per user per week
+model SpamPenalty {
+  id            String   @id @default(cuid())
+  oderId   String
+  guildId       String
+  weekStartDate DateTime
+  penaltyCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([oderId, guildId, weekStartDate])
 }

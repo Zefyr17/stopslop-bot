@@ -6,6 +6,7 @@ import { ratingService } from './services/RatingService';
 import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
 import { voterStatsService } from './services/VoterStatsService';
+import { spamPenaltyService } from './services/SpamPenaltyService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
 import { prisma } from './db';
@@ -315,6 +316,52 @@ bot.on(Events.MessageCreate, async (message) => {
       return;
     }
 
+    // Check spam penalty post limit
+    const allChannelPairs = await channelPairService.getChannelPairs(guildId);
+    const monitoredChannelIds = allChannelPairs.map(p => p.monitoredChannelId);
+    const postLimitCheck = await spamPenaltyService.canUserPost(
+      message.author.id,
+      guildId,
+      monitoredChannelIds,
+      config.defaultPostLimit
+    );
+
+    if (!postLimitCheck.canPost) {
+      console.log(`[SpamPenalty] User ${message.author.id} blocked from posting. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
+
+      // Delete the message
+      try {
+        await message.delete();
+      } catch (error) {
+        console.error('Failed to delete spam-blocked message:', error);
+      }
+
+      // Send DM to user
+      try {
+        if (postLimitCheck.limit === 0) {
+          await message.author.send(
+            `🚫 **You were slashed from posting** in **${message.guild?.name}** due to consistent low quality content last week.\n\nYour post limit has been reduced to **0** for this week. Focus on quality over quantity!`
+          );
+        } else {
+          await message.author.send(
+            `🚫 **Post limit reached** in **${message.guild?.name}**.\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week. Your limit was reduced due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`
+          );
+        }
+      } catch (dmError) {
+        console.log(`Could not DM user ${message.author.tag} about post limit (DMs might be closed)`);
+      }
+
+      // Log to mod_log
+      await modLogService.log(guildId, ModLogEventType.POST_BLOCKED_SPAM, {
+        oderId: message.author.id,
+        postLink: link,
+        postLimit: postLimitCheck.limit,
+        details: `User has ${postLimitCheck.penaltiesFromLastWeek} penalty(ies) from last week. Current posts: ${postLimitCheck.currentCount}/${postLimitCheck.limit}`,
+      });
+
+      return;
+    }
+
     const post = await postService.createPost({
       link,
       authorId: message.author.id,
@@ -453,6 +500,23 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       statusChanged = true;
 
       const votersList = await voteService.getAllVotesWithUsers(post.id);
+
+      // Check if this is low quality spam (0-2 upvotes, reached downvote threshold)
+      // If so, add a penalty to the author (-1 post for next week)
+      if (spamPenaltyService.isLowQualitySpam(
+        weightedVoteCounts.weightedUpvotes,
+        weightedVoteCounts.weightedDownvotes,
+        config.downvoteThreshold
+      )) {
+        const penaltyCount = await spamPenaltyService.addPenalty(post.authorId, guildId);
+        await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_ADDED, {
+          oderId: post.authorId,
+          postId: post.id,
+          postLink: post.link,
+          penaltyCount,
+          details: `User received spam penalty #${penaltyCount} for low quality content (${weightedVoteCounts.weightedUpvotes} yes / ${weightedVoteCounts.weightedDownvotes} no). Next week post limit reduced.`,
+        });
+      }
 
       await modLogService.log(guildId, ModLogEventType.POST_REJECTED_AUTO, {
         postId: post.id,
@@ -2159,6 +2223,96 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           } catch {
             await interaction.reply({ content: '❌ Failed to fetch voter statistics.', ephemeral: true });
           }
+        }
+        return;
+      }
+    }
+
+    if (commandName === 'spam') {
+      const subcommand = interaction.options.getSubcommand();
+      const targetUser = interaction.options.getUser('user', true);
+
+      if (subcommand === 'check') {
+        try {
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          const { channelPairService } = await import('./services/ChannelPairService');
+          const allChannelPairs = await channelPairService.getChannelPairs(guildId);
+          const monitoredChannelIds = allChannelPairs.map(p => p.monitoredChannelId);
+
+          const postLimitCheck = await spamPenaltyService.canUserPost(
+            targetUser.id,
+            guildId,
+            monitoredChannelIds,
+            config.defaultPostLimit
+          );
+
+          const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(targetUser.id, guildId);
+
+          const embed = new EmbedBuilder()
+            .setColor(postLimitCheck.penaltiesFromLastWeek > 0 ? 0xff4500 : 0x00ff00)
+            .setTitle(`Spam Status: ${targetUser.username}`)
+            .addFields(
+              { name: 'Post Limit This Week', value: `${postLimitCheck.currentCount}/${postLimitCheck.limit}`, inline: true },
+              { name: 'Penalties Last Week', value: postLimitCheck.penaltiesFromLastWeek.toString(), inline: true },
+              { name: 'Penalties This Week', value: currentWeekPenalties.toString(), inline: true }
+            )
+            .setTimestamp();
+
+          if (postLimitCheck.penaltiesFromLastWeek > 0) {
+            embed.setDescription(`⚠️ This user has reduced posting privileges due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`);
+          }
+
+          if (currentWeekPenalties > 0) {
+            embed.addFields({
+              name: '⚠️ Warning',
+              value: `User has ${currentWeekPenalties} penalty(ies) this week. Next week's limit will be ${Math.max(0, config.defaultPostLimit - currentWeekPenalties)} posts.`
+            });
+          }
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        } catch (error) {
+          console.error('Error in spam check:', error);
+          await interaction.reply({ content: '❌ Failed to check spam status.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'reset') {
+        try {
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const userRoleIds = Array.from(member.roles.cache.keys());
+
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+          if (!isAdmin) {
+            await interaction.reply({ content: '❌ You do not have permission to reset spam penalties. (Admin role required)', ephemeral: true });
+            return;
+          }
+
+          await spamPenaltyService.resetPenalties(targetUser.id, guildId);
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+            oderId: targetUser.id,
+            adminId: interaction.user.id,
+          });
+
+          await interaction.reply({
+            content: `✅ Spam penalties reset for <@${targetUser.id}>. Their post limit is now restored to default.`,
+            ephemeral: true
+          });
+        } catch (error) {
+          console.error('Error in spam reset:', error);
+          await interaction.reply({ content: '❌ Failed to reset spam penalties.', ephemeral: true });
         }
         return;
       }

@@ -242,6 +242,27 @@ export const commands = [
       subcommand
         .setName('voters')
         .setDescription('Show top voters leaderboard by accuracy percentage')),
+
+  new SlashCommandBuilder()
+    .setName('spam')
+    .setDescription('Manage spam penalties')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('check')
+        .setDescription('Check spam penalties for a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to check')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reset')
+        .setDescription('Reset spam penalties for a user (Admin only)')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to reset penalties for')
+            .setRequired(true)))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

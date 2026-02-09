@@ -14,12 +14,16 @@ export enum ModLogEventType {
   WEEK_CLOSED = 'WEEK_CLOSED',
   EXPORT_RESULTS = 'EXPORT_RESULTS',
   BOT_ERROR = 'BOT_ERROR',
+  SPAM_PENALTY_ADDED = 'SPAM_PENALTY_ADDED',
+  SPAM_PENALTY_RESET = 'SPAM_PENALTY_RESET',
+  POST_BLOCKED_SPAM = 'POST_BLOCKED_SPAM',
 }
 
 interface ModLogData {
   postId?: string;
   postLink?: string;
   authorId?: string;
+  oderId?: string;
   monitoredChannelId?: string;
   adminId?: string;
   oldStatus?: string;
@@ -32,6 +36,8 @@ interface ModLogData {
   weekId?: string;
   weekDates?: string;
   postsCount?: number;
+  penaltyCount?: number;
+  postLimit?: number;
 }
 
 export class ModLogService {
@@ -261,6 +267,52 @@ export class ModLogService {
           .addFields(
             { name: 'Error Details', value: data.details || 'No additional details' }
           );
+        break;
+
+      case ModLogEventType.SPAM_PENALTY_ADDED:
+        embed
+          .setColor(0xff4500)
+          .setTitle('🚨 Spam Penalty Added')
+          .setDescription(`User received a spam penalty for low quality content.`)
+          .addFields(
+            { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
+            { name: 'Penalty #', value: data.penaltyCount?.toString() || '1', inline: true },
+            { name: 'Post ID', value: data.postId || 'Unknown', inline: true }
+          );
+        if (data.postLink) {
+          embed.addFields({ name: 'Link', value: data.postLink });
+        }
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
+        break;
+
+      case ModLogEventType.SPAM_PENALTY_RESET:
+        embed
+          .setColor(0x00ff00)
+          .setTitle('✅ Spam Penalties Reset')
+          .setDescription(`Admin reset spam penalties for a user.`)
+          .addFields(
+            { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
+            { name: 'Admin', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
+          );
+        break;
+
+      case ModLogEventType.POST_BLOCKED_SPAM:
+        embed
+          .setColor(0xff0000)
+          .setTitle('🛑 Post Blocked (Spam Limit)')
+          .setDescription(`User attempted to post but was blocked due to spam penalties.`)
+          .addFields(
+            { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
+            { name: 'Post Limit', value: data.postLimit?.toString() || '0', inline: true }
+          );
+        if (data.postLink) {
+          embed.addFields({ name: 'Attempted Link', value: data.postLink });
+        }
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
         break;
 
       default:

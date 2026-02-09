@@ -1,9 +1,17 @@
 import { prisma } from '../db';
 import { Vote, VoteType } from '@prisma/client';
+import { voterStatsService } from './VoterStatsService';
 
 export interface VoteCounts {
   upvotes: number;
   downvotes: number;
+}
+
+export interface WeightedVoteCounts {
+  upvotes: number;
+  downvotes: number;
+  weightedUpvotes: number;
+  weightedDownvotes: number;
 }
 
 export class VoteService {
@@ -153,6 +161,44 @@ export class VoteService {
       userId: vote.user.discordId,
       voteType: vote.type,
     }));
+  }
+
+  /**
+   * Get weighted vote counts for a post.
+   * Top 5 voters by accuracy get x2 weight on their votes.
+   */
+  async getWeightedVoteCounts(postId: string): Promise<WeightedVoteCounts> {
+    const votes = await prisma.vote.findMany({
+      where: { postId },
+      include: {
+        user: true,
+      },
+    });
+
+    // Get all voter discord IDs
+    const voterIds = votes.map(v => v.user.discordId);
+
+    // Get weights for all voters
+    const weights = await voterStatsService.getVoteWeights(voterIds);
+
+    let upvotes = 0;
+    let downvotes = 0;
+    let weightedUpvotes = 0;
+    let weightedDownvotes = 0;
+
+    for (const vote of votes) {
+      const weight = weights.get(vote.user.discordId) || 1;
+
+      if (vote.type === VoteType.UP) {
+        upvotes++;
+        weightedUpvotes += weight;
+      } else {
+        downvotes++;
+        weightedDownvotes += weight;
+      }
+    }
+
+    return { upvotes, downvotes, weightedUpvotes, weightedDownvotes };
   }
 }
 

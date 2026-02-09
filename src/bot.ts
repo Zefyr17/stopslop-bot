@@ -5,6 +5,7 @@ import { voteService } from './services/VoteService';
 import { ratingService } from './services/RatingService';
 import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
+import { voterStatsService } from './services/VoterStatsService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
 import { prisma } from './db';
@@ -439,12 +440,14 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const voteCounts = await voteService.getVoteCounts(post.id);
+    // Use weighted vote counts - top 5 voters get x2 weight
+    const weightedVoteCounts = await voteService.getWeightedVoteCounts(post.id);
 
     let statusChanged = false;
     let newStatus: PostStatus | null = null;
 
-    if (voteCounts.downvotes >= config.downvoteThreshold) {
+    // Check thresholds using weighted votes
+    if (weightedVoteCounts.weightedDownvotes >= config.downvoteThreshold) {
       await postService.updateStatus(post.id, PostStatus.REJECTED);
       newStatus = PostStatus.REJECTED;
       statusChanged = true;
@@ -456,10 +459,10 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         postLink: post.link,
         authorId: post.authorId,
         monitoredChannelId: post.monitoredChannelId || undefined,
-        votes: voteCounts,
+        votes: { upvotes: weightedVoteCounts.weightedUpvotes, downvotes: weightedVoteCounts.weightedDownvotes },
         votersList,
       });
-    } else if (voteCounts.upvotes >= config.upvoteThreshold) {
+    } else if (weightedVoteCounts.weightedUpvotes >= config.upvoteThreshold) {
       await postService.updateStatus(post.id, PostStatus.SHORTLISTED);
       newStatus = PostStatus.SHORTLISTED;
       statusChanged = true;
@@ -471,7 +474,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         postLink: post.link,
         authorId: post.authorId,
         monitoredChannelId: post.monitoredChannelId || undefined,
-        votes: voteCounts,
+        votes: { upvotes: weightedVoteCounts.weightedUpvotes, downvotes: weightedVoteCounts.weightedDownvotes },
         votersList,
       });
     }
@@ -520,7 +523,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
           );
 
             await shortlistChannel.send({
-              content: `⭐ **Shortlisted Content** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
+              content: `⭐ **Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
               components: [rateRow1, rateRow2]
             });
             console.log(`Posted to shortlist channel: ${post.id}`);
@@ -2094,6 +2097,71 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         await interaction.editReply({ content: 'Failed to fetch statistics. Check logs for details.' });
       }
       return;
+    }
+
+    if (commandName === 'slopstats') {
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'voters') {
+        try {
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config) {
+            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+            return;
+          }
+
+          // Check if user has voter role (same permission as voting)
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const hasVoterRole = config.voterRoleIds.length === 0 ||
+            config.voterRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
+
+          if (!hasVoterRole) {
+            await interaction.reply({ content: '❌ You do not have permission to view voter stats.', ephemeral: true });
+            return;
+          }
+
+          await interaction.deferReply();
+
+          // Get leaderboard
+          const leaderboard = await voterStatsService.getVoterLeaderboard();
+
+          if (leaderboard.length === 0) {
+            await interaction.editReply({ content: 'No voting data available yet. Votes are only counted after posts are decided (shortlisted or rejected).' });
+            return;
+          }
+
+          // Build embed
+          const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Top Voters')
+            .setTimestamp();
+
+          // Build leaderboard lines (top 10)
+          const lines: string[] = [];
+          const topVoters = leaderboard.slice(0, 10);
+
+          for (let i = 0; i < topVoters.length; i++) {
+            const voter = topVoters[i];
+            const rank = i + 1;
+            const accuracyStr = voter.accuracy.toFixed(0);
+            lines.push(
+              `${rank}. <@${voter.oderId}> — ${voter.correctVotes} correct (${accuracyStr}% of ${voter.totalVotes})`
+            );
+          }
+
+          embed.setDescription(lines.join('\n'));
+
+          await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Error in slopstats voters:', error);
+          try {
+            await interaction.editReply({ content: '❌ Failed to fetch voter statistics.' });
+          } catch {
+            await interaction.reply({ content: '❌ Failed to fetch voter statistics.', ephemeral: true });
+          }
+        }
+        return;
+      }
     }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);

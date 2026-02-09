@@ -234,6 +234,14 @@ export const commands = [
         .setDescription('Role to check voting stats for (default: voter roles from config)')
         .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('slopstats')
+    .setDescription('View voting statistics and leaderboards')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('voters')
+        .setDescription('Show top voters leaderboard by accuracy percentage')),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

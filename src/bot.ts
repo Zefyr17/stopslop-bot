@@ -340,7 +340,7 @@ bot.on(Events.MessageCreate, async (message) => {
       try {
         if (postLimitCheck.limit === 0) {
           await message.author.send(
-            `🚫 **You were slashed from posting** in **${message.guild?.name}** due to consistent low quality content last week.\n\nYour post limit has been reduced to **0** for this week. Focus on quality over quantity!`
+            `Your posting is paused for this week because none of your three submissions were shortlisted last week. You can post again next week.`
           );
         } else {
           await message.author.send(

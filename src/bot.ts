@@ -338,15 +338,9 @@ bot.on(Events.MessageCreate, async (message) => {
 
       // Send DM to user
       try {
-        if (postLimitCheck.limit === 0) {
-          await message.author.send(
-            `Your posting is paused for this week because none of your three submissions were shortlisted last week. You can post again next week.`
-          );
-        } else {
-          await message.author.send(
-            `🚫 **Post limit reached** in **${message.guild?.name}**.\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week. Your limit was reduced due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`
-          );
-        }
+        await message.author.send(
+          `🚫 **Post limit reached** in **${message.guild?.name}**.\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week. Your limit was reduced due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`
+        );
       } catch (dmError) {
         console.log(`Could not DM user ${message.author.tag} about post limit (DMs might be closed)`);
       }

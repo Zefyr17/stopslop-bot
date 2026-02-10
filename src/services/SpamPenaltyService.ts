@@ -68,7 +68,7 @@ export class SpamPenaltyService {
     });
 
     const penaltyCount = penalty?.penaltyCount || 0;
-    const limit = Math.max(0, defaultLimit - penaltyCount);
+    const limit = Math.max(1, defaultLimit - penaltyCount);
 
     return limit;
   }

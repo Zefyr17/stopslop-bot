@@ -10,6 +10,7 @@ echo "Generating Prisma Client..."
 npm run db:generate
 
 echo "Running database migrations..."
+npx prisma migrate resolve --rolled-back 20260211_spam_penalty_per_post
 npm run db:deploy
 
 echo "Building TypeScript..."

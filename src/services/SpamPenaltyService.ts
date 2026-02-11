@@ -7,11 +7,11 @@ export class SpamPenaltyService {
    * Check if a rejected post qualifies as "low quality spam".
    * A post is considered spam if:
    * - It was rejected (status = REJECTED)
-   * - Upvotes are between 0-2 (no significant support)
+   * - Upvotes are 0 (nobody voted Yes)
    * - Downvotes reached the threshold (5 by default)
    */
   isLowQualitySpam(upvotes: number, downvotes: number, downvoteThreshold: number): boolean {
-    return upvotes <= 2 && downvotes >= downvoteThreshold;
+    return upvotes === 0 && downvotes >= downvoteThreshold;
   }
 
   /**

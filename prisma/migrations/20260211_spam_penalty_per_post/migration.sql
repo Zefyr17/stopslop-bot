@@ -1,5 +1,5 @@
--- Drop old unique constraint and penaltyCount column
-ALTER TABLE "SpamPenalty" DROP CONSTRAINT "SpamPenalty_oderId_guildId_weekStartDate_key";
+-- Drop old unique index and penaltyCount column
+DROP INDEX "SpamPenalty_oderId_guildId_weekStartDate_key";
 ALTER TABLE "SpamPenalty" DROP COLUMN "penaltyCount";
 
 -- Add postId column

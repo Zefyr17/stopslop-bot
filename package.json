@@ -4,7 +4,7 @@
   "description": "Discord bot for content management",
   "main": "dist/index.js",
   "scripts": {
-    "build": "prisma migrate deploy && prisma generate && tsc",
+    "build": "prisma migrate resolve --rolled-back 20260211_spam_penalty_per_post && prisma migrate deploy && prisma generate && tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "watch": "tsc -w",

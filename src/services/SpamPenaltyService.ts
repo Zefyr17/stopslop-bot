@@ -15,35 +15,33 @@ export class SpamPenaltyService {
   }
 
   /**
-   * Add a spam penalty for a user.
-   * Penalties are tracked per week - they affect the NEXT week's post limit.
+   * Add a spam penalty for a user, linked to a specific post.
+   * Each post can only have one penalty.
    */
-  async addPenalty(discordUserId: string, guildId: string): Promise<number> {
-    // Get the start of current week (Monday)
+  async addPenalty(discordUserId: string, guildId: string, postId: string): Promise<number> {
     const now = new Date();
     const weekStart = this.getWeekStart(now);
 
-    const penalty = await prisma.spamPenalty.upsert({
-      where: {
-        oderId_guildId_weekStartDate: {
-          oderId: discordUserId,
-          guildId,
-          weekStartDate: weekStart,
-        },
-      },
-      update: {
-        penaltyCount: { increment: 1 },
-      },
-      create: {
+    await prisma.spamPenalty.create({
+      data: {
         oderId: discordUserId,
         guildId,
+        postId,
         weekStartDate: weekStart,
-        penaltyCount: 1,
       },
     });
 
-    console.log(`[SpamPenalty] Added penalty for user ${discordUserId} in guild ${guildId}. Total penalties this week: ${penalty.penaltyCount}`);
-    return penalty.penaltyCount;
+    // Count total penalties this week
+    const count = await prisma.spamPenalty.count({
+      where: {
+        oderId: discordUserId,
+        guildId,
+        weekStartDate: weekStart,
+      },
+    });
+
+    console.log(`[SpamPenalty] Added penalty for user ${discordUserId} on post ${postId}. Total penalties this week: ${count}`);
+    return count;
   }
 
   /**
@@ -51,26 +49,20 @@ export class SpamPenaltyService {
    * Post limit = defaultLimit - penalties from PREVIOUS week
    */
   async getPostLimit(discordUserId: string, guildId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<number> {
-    // Get start of PREVIOUS week to check penalties
     const now = new Date();
     const currentWeekStart = this.getWeekStart(now);
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(previousWeekStart.getDate() - 7);
 
-    const penalty = await prisma.spamPenalty.findUnique({
+    const penaltyCount = await prisma.spamPenalty.count({
       where: {
-        oderId_guildId_weekStartDate: {
-          oderId: discordUserId,
-          guildId,
-          weekStartDate: previousWeekStart,
-        },
+        oderId: discordUserId,
+        guildId,
+        weekStartDate: previousWeekStart,
       },
     });
 
-    const penaltyCount = penalty?.penaltyCount || 0;
-    const limit = Math.max(1, defaultLimit - penaltyCount);
-
-    return limit;
+    return Math.max(1, defaultLimit - penaltyCount);
   }
 
   /**
@@ -93,7 +85,6 @@ export class SpamPenaltyService {
 
   /**
    * Check if user can post (hasn't exceeded their limit).
-   * Returns { canPost, currentCount, limit, penaltiesFromLastWeek }
    */
   async canUserPost(
     discordUserId: string,
@@ -104,19 +95,16 @@ export class SpamPenaltyService {
     const limit = await this.getPostLimit(discordUserId, guildId, defaultLimit);
     const currentCount = await this.getUserPostCount(discordUserId, guildId, monitoredChannelIds);
 
-    // Get penalties from last week for info
     const now = new Date();
     const currentWeekStart = this.getWeekStart(now);
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(previousWeekStart.getDate() - 7);
 
-    const penalty = await prisma.spamPenalty.findUnique({
+    const penaltiesFromLastWeek = await prisma.spamPenalty.count({
       where: {
-        oderId_guildId_weekStartDate: {
-          oderId: discordUserId,
-          guildId,
-          weekStartDate: previousWeekStart,
-        },
+        oderId: discordUserId,
+        guildId,
+        weekStartDate: previousWeekStart,
       },
     });
 
@@ -124,7 +112,7 @@ export class SpamPenaltyService {
       canPost: currentCount < limit,
       currentCount,
       limit,
-      penaltiesFromLastWeek: penalty?.penaltyCount || 0,
+      penaltiesFromLastWeek,
     };
   }
 
@@ -135,21 +123,17 @@ export class SpamPenaltyService {
     const now = new Date();
     const weekStart = this.getWeekStart(now);
 
-    const penalty = await prisma.spamPenalty.findUnique({
+    return prisma.spamPenalty.count({
       where: {
-        oderId_guildId_weekStartDate: {
-          oderId: discordUserId,
-          guildId,
-          weekStartDate: weekStart,
-        },
+        oderId: discordUserId,
+        guildId,
+        weekStartDate: weekStart,
       },
     });
-
-    return penalty?.penaltyCount || 0;
   }
 
   /**
-   * Reset penalties for a user (admin command).
+   * Reset all penalties for a user (admin command).
    */
   async resetPenalties(discordUserId: string, guildId: string): Promise<void> {
     await prisma.spamPenalty.deleteMany({
@@ -162,12 +146,31 @@ export class SpamPenaltyService {
   }
 
   /**
+   * Remove penalty for a specific post.
+   * Returns true if a penalty was found and removed, false otherwise.
+   */
+  async removePenaltyByPost(postId: string): Promise<boolean> {
+    const penalty = await prisma.spamPenalty.findUnique({
+      where: { postId },
+    });
+
+    if (!penalty) return false;
+
+    await prisma.spamPenalty.delete({
+      where: { postId },
+    });
+
+    console.log(`[SpamPenalty] Removed penalty for post ${postId}`);
+    return true;
+  }
+
+  /**
    * Get the start of the week (Monday 00:00:00 UTC).
    */
   private getWeekStart(date: Date): Date {
     const d = new Date(date);
     const day = d.getUTCDay();
-    const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+    const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
     d.setUTCDate(diff);
     d.setUTCHours(0, 0, 0, 0);
     return d;

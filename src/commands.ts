@@ -262,6 +262,14 @@ export const commands = [
           option.setName('user')
             .setDescription('User to reset penalties for')
             .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('remove')
+        .setDescription('Remove spam penalty for a specific post (Admin only)')
+        .addStringOption(option =>
+          option.setName('post_id')
+            .setDescription('Post ID to remove penalty for')
+            .setRequired(true)))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 

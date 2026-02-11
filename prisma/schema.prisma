@@ -121,15 +121,13 @@ model ChannelPair {
   @@unique([guildConfigId, monitoredChannelId])
 }
 
-// Tracks spam penalties per user per week
+// Tracks spam penalties per post (one penalty per post max)
 model SpamPenalty {
   id            String   @id @default(cuid())
-  oderId   String
+  oderId        String
   guildId       String
+  postId        String   @unique
   weekStartDate DateTime
-  penaltyCount  Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  @@unique([oderId, guildId, weekStartDate])
 }

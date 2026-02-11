@@ -502,7 +502,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         weightedVoteCounts.weightedDownvotes,
         config.downvoteThreshold
       )) {
-        const penaltyCount = await spamPenaltyService.addPenalty(post.authorId, guildId);
+        const penaltyCount = await spamPenaltyService.addPenalty(post.authorId, guildId, post.id);
         await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_ADDED, {
           oderId: post.authorId,
           postId: post.id,
@@ -2224,9 +2224,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
     if (commandName === 'spam') {
       const subcommand = interaction.options.getSubcommand();
-      const targetUser = interaction.options.getUser('user', true);
 
       if (subcommand === 'check') {
+        const targetUser = interaction.options.getUser('user', true);
         try {
           const config = await guildConfigService.getConfig(guildId);
           if (!config) {
@@ -2277,6 +2277,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
 
       if (subcommand === 'reset') {
+        const targetUser = interaction.options.getUser('user', true);
         try {
           const member = await interaction.guild!.members.fetch(interaction.user.id);
           const userRoleIds = Array.from(member.roles.cache.keys());
@@ -2307,6 +2308,45 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         } catch (error) {
           console.error('Error in spam reset:', error);
           await interaction.reply({ content: '❌ Failed to reset spam penalties.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'remove') {
+        const postId = interaction.options.getString('post_id', true);
+        try {
+          const member = await interaction.guild!.members.fetch(interaction.user.id);
+          const userRoleIds = Array.from(member.roles.cache.keys());
+
+          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+          if (!isAdmin) {
+            await interaction.reply({ content: '❌ You do not have permission to remove spam penalties. (Admin role required)', ephemeral: true });
+            return;
+          }
+
+          const removed = await spamPenaltyService.removePenaltyByPost(postId);
+
+          if (!removed) {
+            await interaction.reply({
+              content: `❌ No spam penalty found for post \`${postId}\`.`,
+              ephemeral: true
+            });
+            return;
+          }
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+            postId,
+            adminId: interaction.user.id,
+            details: `Penalty removed for specific post ${postId}`,
+          });
+
+          await interaction.reply({
+            content: `✅ Spam penalty removed for post \`${postId}\`.`,
+            ephemeral: true
+          });
+        } catch (error) {
+          console.error('Error in spam remove:', error);
+          await interaction.reply({ content: '❌ Failed to remove spam penalty.', ephemeral: true });
         }
         return;
       }

@@ -121,6 +121,18 @@ model ChannelPair {
   @@unique([guildConfigId, monitoredChannelId])
 }
 
+// Tracks manually granted x2 vote weight for specific users
+model WeightBoost {
+  id        String   @id @default(cuid())
+  oderId    String
+  guildId   String
+  grantedBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([oderId, guildId])
+}
+
 // Tracks spam penalties per post (one penalty per post max)
 model SpamPenalty {
   id            String   @id @default(cuid())

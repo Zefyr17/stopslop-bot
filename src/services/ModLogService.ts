@@ -17,6 +17,8 @@ export enum ModLogEventType {
   SPAM_PENALTY_ADDED = 'SPAM_PENALTY_ADDED',
   SPAM_PENALTY_RESET = 'SPAM_PENALTY_RESET',
   POST_BLOCKED_SPAM = 'POST_BLOCKED_SPAM',
+  WEIGHT_BOOST_GRANTED = 'WEIGHT_BOOST_GRANTED',
+  WEIGHT_BOOST_REVOKED = 'WEIGHT_BOOST_REVOKED',
 }
 
 interface ModLogData {
@@ -313,6 +315,26 @@ export class ModLogService {
         if (data.details) {
           embed.addFields({ name: 'Details', value: data.details });
         }
+        break;
+
+      case ModLogEventType.WEIGHT_BOOST_GRANTED:
+        embed
+          .setColor(0x00ff00)
+          .setTitle('⚖️ Vote Weight x2 Granted')
+          .addFields(
+            { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
+            { name: 'Granted By', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
+          );
+        break;
+
+      case ModLogEventType.WEIGHT_BOOST_REVOKED:
+        embed
+          .setColor(0xff6600)
+          .setTitle('⚖️ Vote Weight x2 Revoked')
+          .addFields(
+            { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
+            { name: 'Revoked By', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
+          );
         break;
 
       default:

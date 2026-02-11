@@ -7,6 +7,7 @@ import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
 import { voterStatsService } from './services/VoterStatsService';
 import { spamPenaltyService } from './services/SpamPenaltyService';
+import { weightBoostService } from './services/WeightBoostService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
 import { prisma } from './db';
@@ -481,8 +482,8 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Use weighted vote counts - top 5 voters get x2 weight
-    const weightedVoteCounts = await voteService.getWeightedVoteCounts(post.id);
+    // Use weighted vote counts - boosted voters get x2 weight
+    const weightedVoteCounts = await voteService.getWeightedVoteCounts(post.id, guildId);
 
     let statusChanged = false;
     let newStatus: PostStatus | null = null;
@@ -2347,6 +2348,78 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         } catch (error) {
           console.error('Error in spam remove:', error);
           await interaction.reply({ content: '❌ Failed to remove spam penalty.', ephemeral: true });
+        }
+        return;
+      }
+    }
+    if (commandName === 'weight') {
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'grant') {
+        const targetUser = interaction.options.getUser('user', true);
+        try {
+          const granted = await weightBoostService.grantBoost(targetUser.id, guildId, interaction.user.id);
+          if (granted) {
+            await modLogService.log(guildId, ModLogEventType.WEIGHT_BOOST_GRANTED, {
+              oderId: targetUser.id,
+              adminId: interaction.user.id,
+              details: `x2 vote weight granted to <@${targetUser.id}> by <@${interaction.user.id}>`,
+            });
+            await interaction.reply({ content: `✅ Granted x2 vote weight to <@${targetUser.id}>.`, ephemeral: true });
+          } else {
+            await interaction.reply({ content: `⚠️ <@${targetUser.id}> already has x2 vote weight.`, ephemeral: true });
+          }
+        } catch (error) {
+          console.error('Error in weight grant:', error);
+          await interaction.reply({ content: '❌ Failed to grant weight boost.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'revoke') {
+        const targetUser = interaction.options.getUser('user', true);
+        try {
+          const revoked = await weightBoostService.revokeBoost(targetUser.id, guildId);
+          if (revoked) {
+            await modLogService.log(guildId, ModLogEventType.WEIGHT_BOOST_REVOKED, {
+              oderId: targetUser.id,
+              adminId: interaction.user.id,
+              details: `x2 vote weight revoked from <@${targetUser.id}> by <@${interaction.user.id}>`,
+            });
+            await interaction.reply({ content: `✅ Revoked x2 vote weight from <@${targetUser.id}>.`, ephemeral: true });
+          } else {
+            await interaction.reply({ content: `⚠️ <@${targetUser.id}> does not have x2 vote weight.`, ephemeral: true });
+          }
+        } catch (error) {
+          console.error('Error in weight revoke:', error);
+          await interaction.reply({ content: '❌ Failed to revoke weight boost.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'list') {
+        try {
+          const boosts = await weightBoostService.getAllBoosts(guildId);
+
+          if (boosts.length === 0) {
+            await interaction.reply({ content: 'No users currently have x2 vote weight.', ephemeral: true });
+            return;
+          }
+
+          const lines = boosts.map((b, i) =>
+            `${i + 1}. <@${b.oderId}> — granted by <@${b.grantedBy}>`
+          );
+
+          const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Users with x2 Vote Weight')
+            .setDescription(lines.join('\n'))
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        } catch (error) {
+          console.error('Error in weight list:', error);
+          await interaction.reply({ content: '❌ Failed to list weight boosts.', ephemeral: true });
         }
         return;
       }

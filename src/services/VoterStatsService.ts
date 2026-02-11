@@ -1,5 +1,6 @@
 import { prisma } from '../db';
 import { PostStatus, VoteType } from '@prisma/client';
+import { weightBoostService } from './WeightBoostService';
 
 export interface VoterStats {
   oderId: string;
@@ -78,36 +79,24 @@ export class VoterStatsService {
   }
 
   /**
-   * Get the vote weight for a user based on their position in the leaderboard.
-   * Top 5 voters by accuracy get x2 weight, everyone else gets x1.
+   * Get the vote weight for a user based on manual boost grants.
+   * Users with a WeightBoost get x2 weight, everyone else gets x1.
    */
-  async getVoteWeight(discordUserId: string): Promise<number> {
-    const leaderboard = await this.getVoterLeaderboard();
-
-    // Find user's position in leaderboard
-    const position = leaderboard.findIndex(voter => voter.oderId === discordUserId);
-
-    // Top 5 (positions 0-4) get x2 weight
-    if (position >= 0 && position < 5) {
-      return 2;
-    }
-
-    return 1;
+  async getVoteWeight(discordUserId: string, guildId: string): Promise<number> {
+    const hasBoosted = await weightBoostService.hasBoost(discordUserId, guildId);
+    return hasBoosted ? 2 : 1;
   }
 
   /**
    * Get vote weights for multiple users at once (more efficient for batch operations).
    * Returns a Map of oderId -> weight
    */
-  async getVoteWeights(oderIds: string[]): Promise<Map<string, number>> {
-    const leaderboard = await this.getVoterLeaderboard();
+  async getVoteWeights(oderIds: string[], guildId: string): Promise<Map<string, number>> {
+    const boostedIds = new Set(await weightBoostService.getBoostedUserIds(guildId));
     const weights = new Map<string, number>();
 
-    // Get top 5 user IDs
-    const top5Ids = new Set(leaderboard.slice(0, 5).map(v => v.oderId));
-
     for (const oderId of oderIds) {
-      weights.set(oderId, top5Ids.has(oderId) ? 2 : 1);
+      weights.set(oderId, boostedIds.has(oderId) ? 2 : 1);
     }
 
     return weights;

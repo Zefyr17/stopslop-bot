@@ -165,9 +165,9 @@ export class VoteService {
 
   /**
    * Get weighted vote counts for a post.
-   * Top 5 voters by accuracy get x2 weight on their votes.
+   * Users with manually granted boost get x2 weight on their votes.
    */
-  async getWeightedVoteCounts(postId: string): Promise<WeightedVoteCounts> {
+  async getWeightedVoteCounts(postId: string, guildId: string): Promise<WeightedVoteCounts> {
     const votes = await prisma.vote.findMany({
       where: { postId },
       include: {
@@ -179,7 +179,7 @@ export class VoteService {
     const voterIds = votes.map(v => v.user.discordId);
 
     // Get weights for all voters
-    const weights = await voterStatsService.getVoteWeights(voterIds);
+    const weights = await voterStatsService.getVoteWeights(voterIds, guildId);
 
     let upvotes = 0;
     let downvotes = 0;

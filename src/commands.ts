@@ -271,6 +271,31 @@ export const commands = [
             .setDescription('Post ID to remove penalty for')
             .setRequired(true)))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('weight')
+    .setDescription('Manage x2 vote weight boosts')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('grant')
+        .setDescription('Grant x2 vote weight to a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to grant x2 weight to')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('revoke')
+        .setDescription('Revoke x2 vote weight from a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to revoke x2 weight from')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('List all users with x2 vote weight'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

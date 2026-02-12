@@ -317,33 +317,40 @@ bot.on(Events.MessageCreate, async (message) => {
       return;
     }
 
-    // Check spam penalty post limit
-    const allChannelPairs = await channelPairService.getChannelPairs(guildId);
-    const monitoredChannelIds = allChannelPairs.map(p => p.monitoredChannelId);
+    // Check spam penalty post limit (per channel)
     const postLimitCheck = await spamPenaltyService.canUserPost(
       message.author.id,
       guildId,
-      monitoredChannelIds,
+      message.channelId,
       config.defaultPostLimit
     );
 
     if (!postLimitCheck.canPost) {
-      console.log(`[SpamPenalty] User ${message.author.id} blocked from posting. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
+      console.log(`[SpamPenalty] User ${message.author.id} blocked from posting in ${message.channelId}. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
 
-      // Delete the message
-      try {
-        await message.delete();
-      } catch (error) {
-        console.error('Failed to delete spam-blocked message:', error);
-      }
+      // Get current week penalties to show impact on next week
+      const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(message.author.id, guildId, message.channelId);
+      const nextWeekLimit = Math.max(1, config.defaultPostLimit - currentWeekPenalties);
 
-      // Send DM to user
+      // Reply to the message instead of deleting
       try {
-        await message.author.send(
-          `🚫 **Post limit reached** in **${message.guild?.name}**.\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week. Your limit was reduced due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`
-        );
-      } catch (dmError) {
-        console.log(`Could not DM user ${message.author.tag} about post limit (DMs might be closed)`);
+        let replyText = `🚫 **Post limit reached.**\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week.`;
+
+        if (postLimitCheck.penaltiesFromLastWeek > 0) {
+          replyText += `\nYou have **${postLimitCheck.limit}** post slot${postLimitCheck.limit === 1 ? '' : 's'} this week because some of your posts didn't receive enough positive votes last week.`;
+
+          if (currentWeekPenalties === 0) {
+            replyText += `\n\n✅ Next week your post limit will be back to **${config.defaultPostLimit}/${config.defaultPostLimit}**.`;
+          }
+        }
+
+        if (currentWeekPenalties > 0) {
+          replyText += `\n\n⚠️ Next week your post limit will be **${nextWeekLimit}/${config.defaultPostLimit}** because **${currentWeekPenalties}** of your post${currentWeekPenalties === 1 ? '' : 's'} didn't receive enough positive votes.`;
+        }
+
+        await message.reply(replyText);
+      } catch (replyError) {
+        console.error('Failed to reply to spam-blocked message:', replyError);
       }
 
       // Log to mod_log
@@ -351,7 +358,7 @@ bot.on(Events.MessageCreate, async (message) => {
         oderId: message.author.id,
         postLink: link,
         postLimit: postLimitCheck.limit,
-        details: `User has ${postLimitCheck.penaltiesFromLastWeek} penalty(ies) from last week. Current posts: ${postLimitCheck.currentCount}/${postLimitCheck.limit}`,
+        details: `User has ${postLimitCheck.penaltiesFromLastWeek} penalty(ies) from last week, ${currentWeekPenalties} penalty(ies) this week. Current posts: ${postLimitCheck.currentCount}/${postLimitCheck.limit}. Next week limit: ${nextWeekLimit}`,
       });
 
       return;
@@ -503,7 +510,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
         weightedVoteCounts.weightedDownvotes,
         config.downvoteThreshold
       )) {
-        const penaltyCount = await spamPenaltyService.addPenalty(post.authorId, guildId, post.id);
+        const penaltyCount = await spamPenaltyService.addPenalty(post.authorId, guildId, post.id, post.weekId);
         await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_ADDED, {
           oderId: post.authorId,
           postId: post.id,
@@ -2237,36 +2244,39 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           const { channelPairService } = await import('./services/ChannelPairService');
           const allChannelPairs = await channelPairService.getChannelPairs(guildId);
-          const monitoredChannelIds = allChannelPairs.map(p => p.monitoredChannelId);
-
-          const postLimitCheck = await spamPenaltyService.canUserPost(
-            targetUser.id,
-            guildId,
-            monitoredChannelIds,
-            config.defaultPostLimit
-          );
-
-          const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(targetUser.id, guildId);
 
           const embed = new EmbedBuilder()
-            .setColor(postLimitCheck.penaltiesFromLastWeek > 0 ? 0xff4500 : 0x00ff00)
+            .setColor(0x5865F2)
             .setTitle(`Spam Status: ${targetUser.username}`)
-            .addFields(
-              { name: 'Post Limit This Week', value: `${postLimitCheck.currentCount}/${postLimitCheck.limit}`, inline: true },
-              { name: 'Penalties Last Week', value: postLimitCheck.penaltiesFromLastWeek.toString(), inline: true },
-              { name: 'Penalties This Week', value: currentWeekPenalties.toString(), inline: true }
-            )
             .setTimestamp();
 
-          if (postLimitCheck.penaltiesFromLastWeek > 0) {
-            embed.setDescription(`⚠️ This user has reduced posting privileges due to ${postLimitCheck.penaltiesFromLastWeek} spam penalty(ies) from last week.`);
+          for (const pair of allChannelPairs) {
+            const channelId = pair.monitoredChannelId;
+            const channelName = interaction.guild!.channels.cache.get(channelId)?.name || channelId;
+
+            const postLimitCheck = await spamPenaltyService.canUserPost(
+              targetUser.id,
+              guildId,
+              channelId,
+              config.defaultPostLimit
+            );
+
+            const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(targetUser.id, guildId, channelId);
+            const nextWeekLimit = Math.max(1, config.defaultPostLimit - currentWeekPenalties);
+
+            let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
+            if (postLimitCheck.penaltiesFromLastWeek > 0) {
+              channelStatus += `\nPenalties last week: **${postLimitCheck.penaltiesFromLastWeek}** (limit reduced)`;
+            }
+            if (currentWeekPenalties > 0) {
+              channelStatus += `\nPenalties this week: **${currentWeekPenalties}** → next week limit: **${nextWeekLimit}/${config.defaultPostLimit}**`;
+            }
+
+            embed.addFields({ name: `#${channelName}`, value: channelStatus });
           }
 
-          if (currentWeekPenalties > 0) {
-            embed.addFields({
-              name: '⚠️ Warning',
-              value: `User has ${currentWeekPenalties} penalty(ies) this week. Next week's limit will be ${Math.max(0, config.defaultPostLimit - currentWeekPenalties)} posts.`
-            });
+          if (allChannelPairs.length === 0) {
+            embed.setDescription('No monitored channels configured.');
           }
 
           await interaction.reply({ embeds: [embed], ephemeral: true });

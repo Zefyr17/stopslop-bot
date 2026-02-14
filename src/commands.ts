@@ -236,12 +236,12 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
-    .setName('slopstats')
-    .setDescription('View voting statistics and leaderboards')
+    .setName('leaderboard')
+    .setDescription('View raffle ticket leaderboard')
     .addSubcommand(subcommand =>
       subcommand
-        .setName('voters')
-        .setDescription('Show top voters leaderboard by accuracy percentage')),
+        .setName('stats')
+        .setDescription('Show raffle tickets leaderboard')),
 
   new SlashCommandBuilder()
     .setName('spam')
@@ -295,6 +295,27 @@ export const commands = [
       subcommand
         .setName('list')
         .setDescription('List all users with x2 vote weight'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('raffle')
+    .setDescription('Manage the weekly raffle system')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('draw')
+        .setDescription('Draw raffle winners from current ticket pool (Admin only)'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('role')
+        .setDescription('Set the role to assign to raffle winners (Admin only)')
+        .addRoleOption(option =>
+          option.setName('role')
+            .setDescription('The Discord role to give to winners')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('badges')
+        .setDescription('Show raffle win counts'))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 

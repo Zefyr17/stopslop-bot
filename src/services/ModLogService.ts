@@ -19,6 +19,8 @@ export enum ModLogEventType {
   POST_BLOCKED_SPAM = 'POST_BLOCKED_SPAM',
   WEIGHT_BOOST_GRANTED = 'WEIGHT_BOOST_GRANTED',
   WEIGHT_BOOST_REVOKED = 'WEIGHT_BOOST_REVOKED',
+  RAFFLE_DRAWN = 'RAFFLE_DRAWN',
+  RAFFLE_ROLE_SET = 'RAFFLE_ROLE_SET',
 }
 
 interface ModLogData {
@@ -40,6 +42,7 @@ interface ModLogData {
   postsCount?: number;
   penaltyCount?: number;
   postLimit?: number;
+  winners?: Array<{ oderId: string; tickets: number }>;
 }
 
 export class ModLogService {
@@ -335,6 +338,36 @@ export class ModLogService {
             { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
             { name: 'Revoked By', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
           );
+        break;
+
+      case ModLogEventType.RAFFLE_DRAWN:
+        embed
+          .setColor(0xFFD700)
+          .setTitle('🎉 Raffle Drawn')
+          .addFields(
+            { name: 'Drawn By', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
+          );
+        if (data.winners && data.winners.length > 0) {
+          embed.addFields({
+            name: 'Winners',
+            value: data.winners.map((w, i) => `${i + 1}. <@${w.oderId}> (${w.tickets} tickets)`).join('\n'),
+          });
+        }
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
+        break;
+
+      case ModLogEventType.RAFFLE_ROLE_SET:
+        embed
+          .setColor(0x5865F2)
+          .setTitle('🎰 Raffle Role Updated')
+          .addFields(
+            { name: 'Set By', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
+          );
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
         break;
 
       default:

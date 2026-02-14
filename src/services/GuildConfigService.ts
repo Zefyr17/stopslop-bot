@@ -37,6 +37,7 @@ export class GuildConfigService {
       adminRoleIds: string[];
       upvoteThreshold: number;
       downvoteThreshold: number;
+      raffleRoleId: string | null;
     }>
   ): Promise<GuildConfig> {
     return prisma.guildConfig.update({
@@ -66,6 +67,10 @@ export class GuildConfigService {
 
   async setModLogChannel(guildId: string, channelId: string | null): Promise<GuildConfig> {
     return this.updateConfig(guildId, { modLogChannelId: channelId });
+  }
+
+  async setRaffleRole(guildId: string, roleId: string): Promise<GuildConfig> {
+    return this.updateConfig(guildId, { raffleRoleId: roleId });
   }
 
   async setAdminRoles(guildId: string, roleIds: string[]): Promise<GuildConfig> {

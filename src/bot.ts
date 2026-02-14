@@ -5,9 +5,9 @@ import { voteService } from './services/VoteService';
 import { ratingService } from './services/RatingService';
 import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
-import { voterStatsService } from './services/VoterStatsService';
 import { spamPenaltyService } from './services/SpamPenaltyService';
 import { weightBoostService } from './services/WeightBoostService';
+import { raffleService } from './services/RaffleService';
 import { extractFirstLink } from './utils/linkDetector';
 import { VoteType, PostStatus, WeekStatus } from '@prisma/client';
 import { prisma } from './db';
@@ -782,6 +782,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             inline: false
           },
           {
+            name: 'Raffle System',
+            value: '`/raffle role @role` - set winner role\n`/raffle draw` - draw 5 winners\n`/raffle badges` - view win counts\n`/leaderboard stats` - view current tickets',
+            inline: false
+          },
+          {
             name: 'How It Works',
             value: '**Content Voting**\nWhen someone posts a link in a monitored channel, the bot creates a vote with Yes/No buttons.\n\n• Enough Yes votes → post shortlisted, appears in shortlist channel with rating buttons\n• Enough No votes → post rejected and deleted\n\n**Rating System**\nJudges rate shortlisted posts with 1-5 stars. Use `/results` to see rankings by average rating.\n\n**Duplicate Detection**\nIf someone posts the same link twice, it\'s automatically deleted.',
             inline: false
@@ -849,6 +854,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               name: '📊 Voting Thresholds',
               value: `👍 Yes: **${config.upvoteThreshold}**\n👎 No: **${config.downvoteThreshold}**`,
               inline: false
+            },
+            {
+              name: '🎰 Raffle Role',
+              value: config.raffleRoleId ? `<@&${config.raffleRoleId}>` : '*Not set*',
+              inline: true
             }
           )
           .setTimestamp();
@@ -2165,10 +2175,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       return;
     }
 
-    if (commandName === 'slopstats') {
+    if (commandName === 'leaderboard') {
       const subcommand = interaction.options.getSubcommand();
 
-      if (subcommand === 'voters') {
+      if (subcommand === 'stats') {
         try {
           const config = await guildConfigService.getConfig(guildId);
           if (!config) {
@@ -2188,42 +2198,46 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           await interaction.deferReply();
 
-          // Get leaderboard
-          const leaderboard = await voterStatsService.getVoterLeaderboard();
+          const holders = await raffleService.getTicketHolders(guildId);
 
-          if (leaderboard.length === 0) {
-            await interaction.editReply({ content: 'No voting data available yet. Votes are only counted after posts are decided (shortlisted or rejected).' });
+          if (holders.length === 0) {
+            await interaction.editReply({ content: 'No tickets earned yet since the last raffle. Correct votes on decided posts = tickets!' });
             return;
           }
 
-          // Build embed
           const embed = new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('Top Voters')
+            .setTitle('Raffle Tickets Leaderboard')
             .setTimestamp();
 
-          // Build leaderboard lines (top 10)
           const lines: string[] = [];
-          const topVoters = leaderboard.slice(0, 10);
+          const topHolders = holders.slice(0, 10);
 
-          for (let i = 0; i < topVoters.length; i++) {
-            const voter = topVoters[i];
+          for (let i = 0; i < topHolders.length; i++) {
+            const holder = topHolders[i];
             const rank = i + 1;
-            const accuracyStr = voter.accuracy.toFixed(0);
+            const accuracyStr = holder.accuracy.toFixed(0);
             lines.push(
-              `${rank}. <@${voter.oderId}> — ${voter.correctVotes} correct (${accuracyStr}% of ${voter.totalVotes})`
+              `${rank}. <@${holder.oderId}> — ${holder.tickets} ticket${holder.tickets !== 1 ? 's' : ''} (${accuracyStr}% of ${holder.totalVotes} votes)`
             );
           }
 
           embed.setDescription(lines.join('\n'));
 
+          const lastRaffle = await raffleService.getLastRaffle(guildId);
+          if (lastRaffle) {
+            embed.setFooter({ text: `Tickets since: ${lastRaffle.drawnAt.toISOString().split('T')[0]}` });
+          } else {
+            embed.setFooter({ text: 'Tickets since: all time (no raffle drawn yet)' });
+          }
+
           await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-          console.error('Error in slopstats voters:', error);
+          console.error('Error in leaderboard stats:', error);
           try {
-            await interaction.editReply({ content: '❌ Failed to fetch voter statistics.' });
+            await interaction.editReply({ content: '❌ Failed to fetch leaderboard.' });
           } catch {
-            await interaction.reply({ content: '❌ Failed to fetch voter statistics.', ephemeral: true });
+            await interaction.reply({ content: '❌ Failed to fetch leaderboard.', ephemeral: true });
           }
         }
         return;
@@ -2430,6 +2444,133 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         } catch (error) {
           console.error('Error in weight list:', error);
           await interaction.reply({ content: '❌ Failed to list weight boosts.', ephemeral: true });
+        }
+        return;
+      }
+    }
+
+    if (commandName === 'raffle') {
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'role') {
+        const role = interaction.options.getRole('role', true);
+        try {
+          await guildConfigService.getOrCreateConfig(guildId);
+          await guildConfigService.setRaffleRole(guildId, role.id);
+
+          await modLogService.log(guildId, ModLogEventType.RAFFLE_ROLE_SET, {
+            adminId: interaction.user.id,
+            details: `Raffle role set to <@&${role.id}>`,
+          });
+
+          await interaction.reply({
+            content: `✅ Raffle winner role set to <@&${role.id}>`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in raffle role:', error);
+          await interaction.reply({ content: '❌ Failed to set raffle role.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'draw') {
+        await interaction.deferReply();
+
+        try {
+          const config = await guildConfigService.getConfig(guildId);
+          if (!config?.raffleRoleId) {
+            await interaction.editReply({ content: '❌ No raffle role configured. Use `/raffle role @role` first.' });
+            return;
+          }
+
+          const result = await raffleService.drawWinners(guildId, interaction.user.id, 5);
+
+          // Remove raffle role from previous winners
+          const guild = interaction.guild!;
+          const raffleRole = await guild.roles.fetch(config.raffleRoleId);
+          if (raffleRole) {
+            for (const [, member] of raffleRole.members) {
+              try {
+                await member.roles.remove(config.raffleRoleId);
+              } catch (e) {
+                console.error(`Failed to remove raffle role from ${member.id}:`, e);
+              }
+            }
+          }
+
+          // Assign raffle role to new winners
+          for (const winner of result.winners) {
+            try {
+              const winnerMember = await guild.members.fetch(winner.oderId);
+              await winnerMember.roles.add(config.raffleRoleId);
+            } catch (e) {
+              console.error(`Failed to assign raffle role to ${winner.oderId}:`, e);
+            }
+          }
+
+          // Build announcement embed
+          const embed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🎉 Raffle Winners!')
+            .setTimestamp();
+
+          const winnerLines = result.winners.map((w, i) =>
+            `${i + 1}. <@${w.oderId}> (${w.tickets} ticket${w.tickets !== 1 ? 's' : ''})`
+          );
+          embed.setDescription(winnerLines.join('\n'));
+          embed.addFields(
+            { name: 'Participants', value: result.totalParticipants.toString(), inline: true },
+            { name: 'Total Tickets', value: result.totalTickets.toString(), inline: true },
+          );
+          embed.setFooter({ text: 'Tickets have been reset. New tickets start accumulating now!' });
+
+          await modLogService.log(guildId, ModLogEventType.RAFFLE_DRAWN, {
+            adminId: interaction.user.id,
+            winners: result.winners,
+            details: `Raffle drawn with ${result.totalParticipants} participants and ${result.totalTickets} total tickets.`,
+          });
+
+          await interaction.editReply({ embeds: [embed] });
+        } catch (error: any) {
+          console.error('Error in raffle draw:', error);
+          await interaction.editReply({
+            content: `❌ ${error.message || 'Failed to draw raffle winners.'}`,
+          });
+        }
+        return;
+      }
+
+      if (subcommand === 'badges') {
+        try {
+          await interaction.deferReply();
+
+          const winCounts = await raffleService.getWinCounts(guildId);
+
+          if (winCounts.length === 0) {
+            await interaction.editReply({ content: 'No raffle winners yet!' });
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('Raffle Badges')
+            .setTimestamp();
+
+          const lines = winCounts.slice(0, 15).map((entry, i) => {
+            const badges = '🏆'.repeat(Math.min(entry.wins, 10));
+            return `${i + 1}. <@${entry.oderId}> — ${entry.wins} win${entry.wins !== 1 ? 's' : ''} ${badges}`;
+          });
+
+          embed.setDescription(lines.join('\n'));
+          await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Error in raffle badges:', error);
+          try {
+            await interaction.editReply({ content: '❌ Failed to fetch badge data.' });
+          } catch {
+            await interaction.reply({ content: '❌ Failed to fetch badge data.', ephemeral: true });
+          }
         }
         return;
       }

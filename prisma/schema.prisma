@@ -105,6 +105,7 @@ model GuildConfig {
   upvoteThreshold      Int           @default(5)
   downvoteThreshold    Int           @default(5)
   defaultPostLimit     Int           @default(3)
+  raffleRoleId         String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 }
@@ -131,6 +132,32 @@ model WeightBoost {
   updatedAt DateTime @updatedAt
 
   @@unique([oderId, guildId])
+}
+
+// Tracks each raffle draw event
+model Raffle {
+  id        String         @id @default(cuid())
+  guildId   String
+  drawnAt   DateTime       @default(now())
+  drawnBy   String
+  winners   RaffleWinner[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([guildId, drawnAt])
+}
+
+// Tracks individual winners per raffle
+model RaffleWinner {
+  id        String   @id @default(cuid())
+  raffleId  String
+  oderId    String
+  tickets   Int
+  raffle    Raffle   @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([raffleId, oderId])
 }
 
 // Tracks spam penalties per post (one penalty per post max)

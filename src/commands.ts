@@ -1,4 +1,4 @@
-import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder } from 'discord.js';
 
 export const commands = [
   new SlashCommandBuilder()
@@ -67,8 +67,7 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')
-        .setDescription('List all channel pairs'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('List all channel pairs')),
 
   new SlashCommandBuilder()
     .setName('set-voter-roles')
@@ -84,8 +83,7 @@ export const commands = [
     .addRoleOption(option =>
       option.setName('role3')
         .setDescription('Third role')
-        .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('set-judge-roles')
@@ -101,8 +99,7 @@ export const commands = [
     .addRoleOption(option =>
       option.setName('role3')
         .setDescription('Third role')
-        .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('set-thresholds')
@@ -116,8 +113,7 @@ export const commands = [
       option.setName('downvotes')
         .setDescription('Number of downvotes needed to reject')
         .setRequired(true)
-        .setMinValue(1))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setMinValue(1)),
 
   new SlashCommandBuilder()
     .setName('results')
@@ -153,8 +149,7 @@ export const commands = [
         .addStringOption(option =>
           option.setName('postid')
             .setDescription('The post ID to reset')
-            .setRequired(true)))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+            .setRequired(true))),
 
   new SlashCommandBuilder()
     .setName('week')
@@ -174,8 +169,7 @@ export const commands = [
         .addChannelOption(option =>
           option.setName('monitored')
             .setDescription('Monitored channel to start period for (optional - starts for all if not specified)')
-            .setRequired(false)))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+            .setRequired(false))),
 
   new SlashCommandBuilder()
     .setName('ranking')
@@ -187,8 +181,7 @@ export const commands = [
         .addChannelOption(option =>
           option.setName('monitored')
             .setDescription('Monitored channel to open ranking for (optional - opens for all if not specified)')
-            .setRequired(false)))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+            .setRequired(false))),
 
   new SlashCommandBuilder()
     .setName('export')
@@ -200,13 +193,11 @@ export const commands = [
         .addChannelOption(option =>
           option.setName('monitored')
             .setDescription('Filter by monitored channel (optional)')
-            .setRequired(false)))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+            .setRequired(false))),
 
   new SlashCommandBuilder()
     .setName('reset-database')
-    .setDescription('⚠️ DANGER: Reset entire database and config (Admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('⚠️ DANGER: Reset entire database and config (Admin only)'),
 
   new SlashCommandBuilder()
     .setName('watch-votes')
@@ -219,8 +210,7 @@ export const commands = [
       option.setName('page')
         .setDescription('Page number (10 posts per page)')
         .setRequired(false)
-        .setMinValue(1))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setMinValue(1)),
 
   new SlashCommandBuilder()
     .setName('stats')
@@ -232,8 +222,7 @@ export const commands = [
     .addRoleOption(option =>
       option.setName('role')
         .setDescription('Role to check voting stats for (default: voter roles from config)')
-        .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('leaderboard')
@@ -269,8 +258,7 @@ export const commands = [
         .addStringOption(option =>
           option.setName('post_id')
             .setDescription('Post ID to remove penalty for')
-            .setRequired(true)))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+            .setRequired(true))),
 
   new SlashCommandBuilder()
     .setName('weight')
@@ -294,8 +282,7 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')
-        .setDescription('List all users with x2 vote weight'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('List all users with x2 vote weight')),
 
   new SlashCommandBuilder()
     .setName('raffle')
@@ -315,8 +302,7 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('badges')
-        .setDescription('Show raffle win counts'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('Show raffle win counts')),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

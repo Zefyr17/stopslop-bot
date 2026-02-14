@@ -332,25 +332,32 @@ bot.on(Events.MessageCreate, async (message) => {
       const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(message.author.id, guildId, message.channelId);
       const nextWeekLimit = Math.max(1, config.defaultPostLimit - currentWeekPenalties);
 
-      // Reply to the message instead of deleting
+      // Delete the message and notify user via DM
       try {
-        let replyText = `🚫 **Post limit reached.**\n\nYou've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week.`;
+        await message.delete();
+        console.log(`Deleted post-limit message from ${message.author.tag} in channel ${message.channelId}`);
+      } catch (deleteError) {
+        console.error('Failed to delete post-limit message:', deleteError);
+      }
+
+      try {
+        let dmText = `🚫 **Post limit reached.**\n\nYour message in **${message.guild?.name}** was deleted because you've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week.`;
 
         if (postLimitCheck.penaltiesFromLastWeek > 0) {
-          replyText += `\nYou have **${postLimitCheck.limit}** post slot${postLimitCheck.limit === 1 ? '' : 's'} this week because some of your posts didn't receive enough positive votes last week.`;
+          dmText += `\nYou have **${postLimitCheck.limit}** post slot${postLimitCheck.limit === 1 ? '' : 's'} this week because some of your posts didn't receive enough positive votes last week.`;
 
           if (currentWeekPenalties === 0) {
-            replyText += `\n\n✅ Next week your post limit will be back to **${config.defaultPostLimit}/${config.defaultPostLimit}**.`;
+            dmText += `\n\n✅ Next week your post limit will be back to **${config.defaultPostLimit}/${config.defaultPostLimit}**.`;
           }
         }
 
         if (currentWeekPenalties > 0) {
-          replyText += `\n\n⚠️ Next week your post limit will be **${nextWeekLimit}/${config.defaultPostLimit}** because **${currentWeekPenalties}** of your post${currentWeekPenalties === 1 ? '' : 's'} didn't receive enough positive votes.`;
+          dmText += `\n\n⚠️ Next week your post limit will be **${nextWeekLimit}/${config.defaultPostLimit}** because **${currentWeekPenalties}** of your post${currentWeekPenalties === 1 ? '' : 's'} didn't receive enough positive votes.`;
         }
 
-        await message.reply(replyText);
-      } catch (replyError) {
-        console.error('Failed to reply to spam-blocked message:', replyError);
+        await message.author.send(dmText);
+      } catch (dmError) {
+        console.log(`Could not DM user ${message.author.tag} about post limit (DMs might be closed)`);
       }
 
       // Log to mod_log
@@ -868,6 +875,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
 
       if (subcommand === 'set-mod-log') {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+          return;
+        }
+
         const channel = interaction.options.getChannel('channel', true);
 
         if (channel?.type !== ChannelType.GuildText) {
@@ -886,6 +901,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
 
       if (subcommand === 'set-admin-roles') {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+          return;
+        }
+
         const role1 = interaction.options.getRole('role1', true);
         const role2 = interaction.options.getRole('role2', false);
         const role3 = interaction.options.getRole('role3', false);
@@ -905,6 +928,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'channel-pair') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const subcommand = interaction.options.getSubcommand();
       const { channelPairService } = await import('./services/ChannelPairService');
 
@@ -974,6 +1005,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-voter-roles') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const role1 = interaction.options.getRole('role1', true);
       const role2 = interaction.options.getRole('role2', false);
       const role3 = interaction.options.getRole('role3', false);
@@ -991,6 +1030,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-judge-roles') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const role1 = interaction.options.getRole('role1', true);
       const role2 = interaction.options.getRole('role2', false);
       const role3 = interaction.options.getRole('role3', false);
@@ -1009,6 +1056,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-thresholds') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const upvotes = interaction.options.getInteger('upvotes', true);
       const downvotes = interaction.options.getInteger('downvotes', true);
 
@@ -1817,6 +1872,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'watch-votes') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       try {
         const config = await guildConfigService.getConfig(guildId);
         if (!config) {
@@ -1936,6 +1999,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'stats') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       try {
         const config = await guildConfigService.getConfig(guildId);
         if (!config) {
@@ -2245,6 +2316,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'spam') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'check') {
@@ -2377,6 +2456,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
     }
     if (commandName === 'weight') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
+
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'grant') {
@@ -2450,7 +2537,16 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'raffle') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
       const subcommand = interaction.options.getSubcommand();
+
+      if ((subcommand === 'draw' || subcommand === 'role') && !isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+        return;
+      }
 
       if (subcommand === 'role') {
         const role = interaction.options.getRole('role', true);

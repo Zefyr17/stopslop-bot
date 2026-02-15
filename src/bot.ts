@@ -2083,6 +2083,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           }
         }
 
+        // Count spam penalties for this week
+        const penaltyCount = await prisma.spamPenalty.count({
+          where: { weekId: activeWeek.id },
+        });
+
         // Build the embed
         const channelInfo = monitoredChannel ? ` (<#${monitoredChannel.id}>)` : '';
 
@@ -2096,7 +2101,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 `Total: **${totalCount}**`,
                 `Pending: **${pendingCount}**`,
                 `Shortlisted: **${shortlistedCount}**`,
-                `Rejected: **${rejectedCount}**`
+                `Rejected: **${rejectedCount}**`,
+                `Penalties: **${penaltyCount}**`
               ].join('\n'),
               inline: false
             }

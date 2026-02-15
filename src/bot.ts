@@ -875,14 +875,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
 
       if (subcommand === 'set-mod-log') {
-        const member = await interaction.guild!.members.fetch(interaction.user.id);
-        const userRoleIds = Array.from(member.roles.cache.keys());
-        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-        if (!isAdmin) {
-          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-          return;
-        }
-
         const channel = interaction.options.getChannel('channel', true);
 
         if (channel?.type !== ChannelType.GuildText) {
@@ -901,14 +893,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
 
       if (subcommand === 'set-admin-roles') {
-        const member = await interaction.guild!.members.fetch(interaction.user.id);
-        const userRoleIds = Array.from(member.roles.cache.keys());
-        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-        if (!isAdmin) {
-          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-          return;
-        }
-
         const role1 = interaction.options.getRole('role1', true);
         const role2 = interaction.options.getRole('role2', false);
         const role3 = interaction.options.getRole('role3', false);
@@ -928,14 +912,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'channel-pair') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const subcommand = interaction.options.getSubcommand();
       const { channelPairService } = await import('./services/ChannelPairService');
 
@@ -1005,14 +981,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-voter-roles') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const role1 = interaction.options.getRole('role1', true);
       const role2 = interaction.options.getRole('role2', false);
       const role3 = interaction.options.getRole('role3', false);
@@ -1030,14 +998,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-judge-roles') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const role1 = interaction.options.getRole('role1', true);
       const role2 = interaction.options.getRole('role2', false);
       const role3 = interaction.options.getRole('role3', false);
@@ -1056,14 +1016,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'set-thresholds') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const upvotes = interaction.options.getInteger('upvotes', true);
       const downvotes = interaction.options.getInteger('downvotes', true);
 
@@ -1271,23 +1223,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       // Scenario 5: CM (judge) uses admin override
       //   - Expected: Command works (CM has override permissions)
       const subcommand = interaction.options.getSubcommand();
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-
-      const config = await guildConfigService.getConfig(guildId);
-      if (!config) {
-        await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-        return;
-      }
-
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      const isCM = config.judgeRoleIds.length === 0 ||
-        config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
-
-      if (!isAdmin && !isCM) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin or CM role required)', ephemeral: true });
-        return;
-      }
 
       const postId = interaction.options.getString('postid', true);
       const post = await postService.getPostById(postId);
@@ -1508,22 +1443,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'close') {
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to close weeks. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           // Get optional monitored channel parameter
           const monitoredChannel = interaction.options.getChannel('monitored', false);
           const monitoredChannelId = monitoredChannel?.id;
@@ -1573,22 +1492,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'start') {
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to start voting periods. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           // Get optional monitored channel parameter
           const monitoredChannel = interaction.options.getChannel('monitored', false);
           const monitoredChannelId = monitoredChannel?.id;
@@ -1635,22 +1538,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'start') {
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to open ranking. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           // Get optional monitored channel parameter
           const monitoredChannel = interaction.options.getChannel('monitored', false);
           const monitoredChannelId = monitoredChannel?.id;
@@ -1693,22 +1580,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'logs') {
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to export logs. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           // Get optional monitored channel filter
           const monitoredChannel = interaction.options.getChannel('monitored', false);
 
@@ -1872,14 +1743,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'watch-votes') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       try {
         const config = await guildConfigService.getConfig(guildId);
         if (!config) {
@@ -1999,14 +1862,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'stats') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       try {
         const config = await guildConfigService.getConfig(guildId);
         if (!config) {
@@ -2322,14 +2177,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'spam') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'check') {
@@ -2389,21 +2236,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       if (subcommand === 'reset') {
         const targetUser = interaction.options.getUser('user', true);
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config) {
-            await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
-            return;
-          }
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to reset spam penalties. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           await spamPenaltyService.resetPenalties(targetUser.id, guildId);
 
           await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
@@ -2425,15 +2257,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       if (subcommand === 'remove') {
         const postId = interaction.options.getString('post_id', true);
         try {
-          const member = await interaction.guild!.members.fetch(interaction.user.id);
-          const userRoleIds = Array.from(member.roles.cache.keys());
-
-          const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-          if (!isAdmin) {
-            await interaction.reply({ content: '❌ You do not have permission to remove spam penalties. (Admin role required)', ephemeral: true });
-            return;
-          }
-
           const removed = await spamPenaltyService.removePenaltyByPost(postId);
 
           if (!removed) {
@@ -2462,14 +2285,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
     }
     if (commandName === 'weight') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-      if (!isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
-
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'grant') {
@@ -2543,16 +2358,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     }
 
     if (commandName === 'raffle') {
-      const member = await interaction.guild!.members.fetch(interaction.user.id);
-      const userRoleIds = Array.from(member.roles.cache.keys());
-      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
-
       const subcommand = interaction.options.getSubcommand();
-
-      if ((subcommand === 'draw' || subcommand === 'role') && !isAdmin) {
-        await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
-        return;
-      }
 
       if (subcommand === 'role') {
         const role = interaction.options.getRole('role', true);

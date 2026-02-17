@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { WeekStatus } from '@prisma/client';
+import { PostStatus, WeekStatus } from '@prisma/client';
 
 const DEFAULT_POST_LIMIT = 3;
 
@@ -42,25 +42,49 @@ export class SpamPenaltyService {
   }
 
   /**
-   * Get the post limit for a user based on penalties from the previous closed week
-   * for the same monitored channel.
+   * Get the cumulative post limit for a user.
+   *
+   * The limit is calculated across ALL closed weeks:
+   * - Each penalty (spam post) gives -1
+   * - Each shortlisted post gives +1 (recovery)
+   * - Result: defaultLimit - totalPenalties + totalShortlisted, clamped to [1, defaultLimit]
+   *
+   * This means a user must earn back their post slots by getting posts shortlisted.
    */
   async getPostLimit(discordUserId: string, guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<number> {
-    const previousWeek = await this.getPreviousClosedWeek(monitoredChannelId);
+    // Count all penalties across all closed weeks for this channel
+    const closedWeeks = await prisma.week.findMany({
+      where: {
+        status: WeekStatus.CLOSED,
+        monitoredChannelId,
+      },
+      select: { id: true },
+    });
 
-    if (!previousWeek) {
+    if (closedWeeks.length === 0) {
       return defaultLimit;
     }
 
-    const penaltyCount = await prisma.spamPenalty.count({
+    const closedWeekIds = closedWeeks.map(w => w.id);
+
+    const totalPenalties = await prisma.spamPenalty.count({
       where: {
         oderId: discordUserId,
         guildId,
-        weekId: previousWeek.id,
+        weekId: { in: closedWeekIds },
       },
     });
 
-    return Math.max(1, defaultLimit - penaltyCount);
+    const totalShortlisted = await prisma.post.count({
+      where: {
+        authorId: discordUserId,
+        monitoredChannelId,
+        weekId: { in: closedWeekIds },
+        status: PostStatus.SHORTLISTED,
+      },
+    });
+
+    return Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted));
   }
 
   /**
@@ -96,35 +120,22 @@ export class SpamPenaltyService {
     guildId: string,
     monitoredChannelId: string,
     defaultLimit: number = DEFAULT_POST_LIMIT
-  ): Promise<{ canPost: boolean; currentCount: number; limit: number; penaltiesFromLastWeek: number }> {
+  ): Promise<{ canPost: boolean; currentCount: number; limit: number; penaltyBalance: number }> {
     const limit = await this.getPostLimit(discordUserId, guildId, monitoredChannelId, defaultLimit);
     const currentCount = await this.getUserPostCount(discordUserId, monitoredChannelId);
-
-    const previousWeek = await this.getPreviousClosedWeek(monitoredChannelId);
-    let penaltiesFromLastWeek = 0;
-
-    if (previousWeek) {
-      penaltiesFromLastWeek = await prisma.spamPenalty.count({
-        where: {
-          oderId: discordUserId,
-          guildId,
-          weekId: previousWeek.id,
-        },
-      });
-    }
 
     return {
       canPost: currentCount < limit,
       currentCount,
       limit,
-      penaltiesFromLastWeek,
+      penaltyBalance: defaultLimit - limit,
     };
   }
 
   /**
-   * Get penalties for the current active week of a channel (will affect next week).
+   * Get penalties and shortlisted counts for the current active week of a channel.
    */
-  async getCurrentWeekPenalties(discordUserId: string, guildId: string, monitoredChannelId: string): Promise<number> {
+  async getCurrentWeekStats(discordUserId: string, guildId: string, monitoredChannelId: string): Promise<{ penalties: number; shortlisted: number }> {
     const activeWeek = await prisma.week.findFirst({
       where: {
         status: WeekStatus.ACTIVE,
@@ -134,16 +145,27 @@ export class SpamPenaltyService {
     });
 
     if (!activeWeek) {
-      return 0;
+      return { penalties: 0, shortlisted: 0 };
     }
 
-    return prisma.spamPenalty.count({
+    const penalties = await prisma.spamPenalty.count({
       where: {
         oderId: discordUserId,
         guildId,
         weekId: activeWeek.id,
       },
     });
+
+    const shortlisted = await prisma.post.count({
+      where: {
+        authorId: discordUserId,
+        monitoredChannelId,
+        weekId: activeWeek.id,
+        status: PostStatus.SHORTLISTED,
+      },
+    });
+
+    return { penalties, shortlisted };
   }
 
   /**
@@ -176,19 +198,6 @@ export class SpamPenaltyService {
 
     console.log(`[SpamPenalty] Removed penalty for post ${postId}`);
     return true;
-  }
-
-  /**
-   * Get the most recent CLOSED week for a specific monitored channel.
-   */
-  private async getPreviousClosedWeek(monitoredChannelId: string) {
-    return prisma.week.findFirst({
-      where: {
-        status: WeekStatus.CLOSED,
-        monitoredChannelId,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
   }
 }
 

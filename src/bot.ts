@@ -328,10 +328,6 @@ bot.on(Events.MessageCreate, async (message) => {
     if (!postLimitCheck.canPost) {
       console.log(`[SpamPenalty] User ${message.author.id} blocked from posting in ${message.channelId}. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
 
-      // Get current week penalties to show impact on next week
-      const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(message.author.id, guildId, message.channelId);
-      const nextWeekLimit = Math.max(1, config.defaultPostLimit - currentWeekPenalties);
-
       // Delete the message and notify user via DM
       try {
         await message.delete();
@@ -343,16 +339,8 @@ bot.on(Events.MessageCreate, async (message) => {
       try {
         let dmText = `🚫 **Post limit reached.**\n\nYour message in **${message.guild?.name}** was deleted because you've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week.`;
 
-        if (postLimitCheck.penaltiesFromLastWeek > 0) {
-          dmText += `\nYou have **${postLimitCheck.limit}** post slot${postLimitCheck.limit === 1 ? '' : 's'} this week because some of your posts didn't receive enough positive votes last week.`;
-
-          if (currentWeekPenalties === 0) {
-            dmText += `\n\n✅ Next week your post limit will be back to **${config.defaultPostLimit}/${config.defaultPostLimit}**.`;
-          }
-        }
-
-        if (currentWeekPenalties > 0) {
-          dmText += `\n\n⚠️ Next week your post limit will be **${nextWeekLimit}/${config.defaultPostLimit}** because **${currentWeekPenalties}** of your post${currentWeekPenalties === 1 ? '' : 's'} didn't receive enough positive votes.`;
+        if (postLimitCheck.penaltyBalance > 0) {
+          dmText += `\n\nYour limit is reduced to **${postLimitCheck.limit}/${config.defaultPostLimit}** due to past penalties. Get your posts shortlisted to earn back +1 post slot per shortlist.`;
         }
 
         await message.author.send(dmText);
@@ -365,7 +353,7 @@ bot.on(Events.MessageCreate, async (message) => {
         oderId: message.author.id,
         postLink: link,
         postLimit: postLimitCheck.limit,
-        details: `User has ${postLimitCheck.penaltiesFromLastWeek} penalty(ies) from last week, ${currentWeekPenalties} penalty(ies) this week. Current posts: ${postLimitCheck.currentCount}/${postLimitCheck.limit}. Next week limit: ${nextWeekLimit}`,
+        details: `Penalty balance: ${postLimitCheck.penaltyBalance}. Current posts: ${postLimitCheck.currentCount}/${postLimitCheck.limit}.`,
       });
 
       return;
@@ -1159,27 +1147,25 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       resultLines.push('Thank you all for your contributions ✨');
 
-      // Split into multiple embeds if needed (Discord limit: 4096 chars per embed description)
-      const embeds: EmbedBuilder[] = [];
+      // Split results into multiple messages to stay within Discord's 6000 char embed limit
+      const allEmbeds: EmbedBuilder[] = [];
       let currentLines: string[] = [];
       let currentLength = 0;
-      const MAX_LENGTH = 4000; // Leave some buffer
+      const MAX_LENGTH = 4000; // Leave buffer for embed metadata
 
       for (const line of resultLines) {
         const lineLength = line.length + 1; // +1 for newline
 
         if (currentLength + lineLength > MAX_LENGTH && currentLines.length > 0) {
-          // Create embed with current lines
           const embed = new EmbedBuilder()
             .setColor(0xffd700)
-            .setDescription(currentLines.join('\n'))
-            .setTimestamp();
+            .setDescription(currentLines.join('\n'));
 
-          if (embeds.length === 0) {
+          if (allEmbeds.length === 0) {
             embed.setTitle(title);
           }
 
-          embeds.push(embed);
+          allEmbeds.push(embed);
           currentLines = [];
           currentLength = 0;
         }
@@ -1192,17 +1178,47 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       if (currentLines.length > 0) {
         const embed = new EmbedBuilder()
           .setColor(0xffd700)
-          .setDescription(currentLines.join('\n'))
-          .setTimestamp();
+          .setDescription(currentLines.join('\n'));
 
-        if (embeds.length === 0) {
+        if (allEmbeds.length === 0) {
           embed.setTitle(title);
         }
 
-        embeds.push(embed);
+        allEmbeds.push(embed);
       }
 
-      await interaction.editReply({ embeds });
+      // Send embeds in batches - each message can hold up to 5800 chars total across embeds
+      const MAX_TOTAL_CHARS = 5800;
+      let batch: EmbedBuilder[] = [];
+      let batchSize = 0;
+      let isFirst = true;
+
+      for (const embed of allEmbeds) {
+        const embedSize = (embed.data.title?.length || 0) + (embed.data.description?.length || 0) + 50;
+
+        if (batchSize + embedSize > MAX_TOTAL_CHARS && batch.length > 0) {
+          if (isFirst) {
+            await interaction.editReply({ embeds: batch });
+            isFirst = false;
+          } else {
+            await interaction.followUp({ embeds: batch });
+          }
+          batch = [];
+          batchSize = 0;
+        }
+
+        batch.push(embed);
+        batchSize += embedSize;
+      }
+
+      // Send remaining batch
+      if (batch.length > 0) {
+        if (isFirst) {
+          await interaction.editReply({ embeds: batch });
+        } else {
+          await interaction.followUp({ embeds: batch });
+        }
+      }
       return;
     }
 
@@ -2207,15 +2223,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               config.defaultPostLimit
             );
 
-            const currentWeekPenalties = await spamPenaltyService.getCurrentWeekPenalties(targetUser.id, guildId, channelId);
-            const nextWeekLimit = Math.max(1, config.defaultPostLimit - currentWeekPenalties);
+            const currentWeekStats = await spamPenaltyService.getCurrentWeekStats(targetUser.id, guildId, channelId);
 
             let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
-            if (postLimitCheck.penaltiesFromLastWeek > 0) {
-              channelStatus += `\nPenalties last week: **${postLimitCheck.penaltiesFromLastWeek}** (limit reduced)`;
+            if (postLimitCheck.penaltyBalance > 0) {
+              channelStatus += `\nPenalty balance: **-${postLimitCheck.penaltyBalance}** (limit reduced)`;
             }
-            if (currentWeekPenalties > 0) {
-              channelStatus += `\nPenalties this week: **${currentWeekPenalties}** → next week limit: **${nextWeekLimit}/${config.defaultPostLimit}**`;
+            if (currentWeekStats.penalties > 0) {
+              channelStatus += `\nPenalties this week: **${currentWeekStats.penalties}**`;
+            }
+            if (currentWeekStats.shortlisted > 0) {
+              channelStatus += `\nShortlisted this week: **${currentWeekStats.shortlisted}** (+${currentWeekStats.shortlisted} recovery)`;
             }
 
             embed.addFields({ name: `#${channelName}`, value: channelStatus });

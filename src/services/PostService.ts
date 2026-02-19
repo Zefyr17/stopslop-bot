@@ -1,7 +1,7 @@
 import { prisma } from '../db';
 import { Post, PostStatus } from '@prisma/client';
 import { weekService } from './WeekService';
-import { createLinkHash } from '../utils/linkNormalizer';
+import { createLinkHash, normalizeLink } from '../utils/linkNormalizer';
 
 export class PostService {
   async createPost(data: {
@@ -21,6 +21,7 @@ export class PostService {
 
     console.log(`Using active week ${activeWeek.id} (monitoredChannelId: ${activeWeek.monitoredChannelId || 'null'}) for channel ${data.monitoredChannelId || 'null'}`);
     const linkHash = createLinkHash(data.link);
+    console.log(`[PostCreate] Storing link: ${data.link} | hash: ${linkHash}`);
 
     return prisma.post.create({
       data: {
@@ -96,11 +97,27 @@ export class PostService {
    * This is race-condition safe thanks to unique constraint
    */
   async findDuplicatePost(link: string): Promise<Post | null> {
+    const normalized = normalizeLink(link);
     const linkHash = createLinkHash(link);
 
-    return prisma.post.findUnique({
+    console.log(`[DuplicateCheck] Incoming link: ${link}`);
+    console.log(`[DuplicateCheck] Normalized:    ${normalized}`);
+    console.log(`[DuplicateCheck] Hash:          ${linkHash}`);
+
+    const existing = await prisma.post.findUnique({
       where: { linkHash },
     });
+
+    if (existing) {
+      console.log(`[DuplicateCheck] MATCH FOUND — existing post ID: ${existing.id}`);
+      console.log(`[DuplicateCheck] Existing link:       ${existing.link}`);
+      console.log(`[DuplicateCheck] Existing linkHash:   ${existing.linkHash}`);
+      console.log(`[DuplicateCheck] Same link? ${existing.link.trim().toLowerCase() === link.trim().toLowerCase()}`);
+    } else {
+      console.log(`[DuplicateCheck] No duplicate found.`);
+    }
+
+    return existing;
   }
 }
 

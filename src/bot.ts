@@ -311,7 +311,7 @@ bot.on(Events.MessageCreate, async (message) => {
         postLink: link,
         authorId: message.author.id,
         monitoredChannelId: message.channelId,
-        details: `User <@${message.author.id}> posted a duplicate link. Original post by <@${duplicatePost.authorId}>.`,
+        details: `User <@${message.author.id}> posted a duplicate link.\nOriginal post by <@${duplicatePost.authorId}>.\n\nNew link: ${link}\nOriginal link: ${duplicatePost.link}\nHash: ${duplicatePost.linkHash}`,
       });
 
       return;

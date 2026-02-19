@@ -301,6 +301,9 @@ export class ModLogService {
             { name: 'User', value: data.oderId ? `<@${data.oderId}>` : 'Unknown', inline: true },
             { name: 'Admin', value: data.adminId ? `<@${data.adminId}>` : 'Unknown', inline: true }
           );
+        if (data.details) {
+          embed.addFields({ name: 'Details', value: data.details });
+        }
         break;
 
       case ModLogEventType.POST_BLOCKED_SPAM:

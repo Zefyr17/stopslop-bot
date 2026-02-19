@@ -2259,6 +2259,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
             oderId: targetUser.id,
             adminId: interaction.user.id,
+            details: `Penalties reset for ${targetUser.username} (<@${targetUser.id}>) by ${interaction.user.username} (<@${interaction.user.id}>)`,
           });
 
           await interaction.reply({
@@ -2298,6 +2299,125 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         } catch (error) {
           console.error('Error in spam remove:', error);
           await interaction.reply({ content: '❌ Failed to remove spam penalty.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'list') {
+        try {
+          await interaction.deferReply({ ephemeral: true });
+
+          // Get all spam penalties grouped by user
+          const allPenalties = await prisma.spamPenalty.findMany({
+            where: { guildId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (allPenalties.length === 0) {
+            await interaction.editReply({ content: 'No spam penalties found.' });
+            return;
+          }
+
+          // Fetch related posts
+          const postIds = allPenalties.map(p => p.postId);
+          const posts = await prisma.post.findMany({
+            where: { id: { in: postIds } },
+            select: { id: true, link: true, monitoredChannelId: true },
+          });
+          const postMap = new Map(posts.map(p => [p.id, p]));
+
+          // Group by user
+          const userPenalties = new Map<string, Array<{ postId: string; link: string; channelId: string | null }>>();
+          for (const penalty of allPenalties) {
+            const userId = penalty.oderId;
+            if (!userPenalties.has(userId)) {
+              userPenalties.set(userId, []);
+            }
+            const post = postMap.get(penalty.postId);
+            userPenalties.get(userId)!.push({
+              postId: penalty.postId,
+              link: post?.link || 'Unknown',
+              channelId: post?.monitoredChannelId || null,
+            });
+          }
+
+          // Build embeds
+          const lines: string[] = [];
+          for (const [userId, penalties] of userPenalties) {
+            lines.push(`**<@${userId}>** — ${penalties.length} penalty(ies)`);
+            for (const p of penalties) {
+              const channelInfo = p.channelId ? `<#${p.channelId}>` : '';
+              lines.push(`> ${p.link} ${channelInfo} (\`${p.postId}\`)`);
+            }
+            lines.push('');
+          }
+
+          // Split into multiple messages if needed
+          const embeds: EmbedBuilder[] = [];
+          let currentLines: string[] = [];
+          let currentLength = 0;
+          const MAX_LENGTH = 4000;
+
+          for (const line of lines) {
+            const lineLength = line.length + 1;
+            if (currentLength + lineLength > MAX_LENGTH && currentLines.length > 0) {
+              const embed = new EmbedBuilder()
+                .setColor(0xff4500)
+                .setDescription(currentLines.join('\n'));
+              if (embeds.length === 0) {
+                embed.setTitle(`🚨 Spam Penalties (${allPenalties.length} total)`);
+              }
+              embeds.push(embed);
+              currentLines = [];
+              currentLength = 0;
+            }
+            currentLines.push(line);
+            currentLength += lineLength;
+          }
+
+          if (currentLines.length > 0) {
+            const embed = new EmbedBuilder()
+              .setColor(0xff4500)
+              .setDescription(currentLines.join('\n'))
+              .setTimestamp();
+            if (embeds.length === 0) {
+              embed.setTitle(`🚨 Spam Penalties (${allPenalties.length} total)`);
+            }
+            embeds.push(embed);
+          }
+
+          // Send in batches
+          const MAX_TOTAL_CHARS = 5800;
+          let batch: EmbedBuilder[] = [];
+          let batchSize = 0;
+          let isFirst = true;
+
+          for (const embed of embeds) {
+            const embedSize = (embed.data.title?.length || 0) + (embed.data.description?.length || 0) + 50;
+            if (batchSize + embedSize > MAX_TOTAL_CHARS && batch.length > 0) {
+              if (isFirst) {
+                await interaction.editReply({ embeds: batch });
+                isFirst = false;
+              } else {
+                await interaction.followUp({ embeds: batch, ephemeral: true });
+              }
+              batch = [];
+              batchSize = 0;
+            }
+            batch.push(embed);
+            batchSize += embedSize;
+          }
+
+          if (batch.length > 0) {
+            if (isFirst) {
+              await interaction.editReply({ embeds: batch });
+            } else {
+              await interaction.followUp({ embeds: batch, ephemeral: true });
+            }
+          }
+        } catch (error) {
+          console.error('Error in spam list:', error);
+          await interaction.editReply({ content: '❌ Failed to list spam penalties.' });
         }
         return;
       }

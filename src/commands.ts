@@ -258,7 +258,11 @@ export const commands = [
         .addStringOption(option =>
           option.setName('post_id')
             .setDescription('Post ID to remove penalty for')
-            .setRequired(true))),
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('Show all users with active penalties and their posts')),
 
   new SlashCommandBuilder()
     .setName('weight')

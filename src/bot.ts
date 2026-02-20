@@ -2225,6 +2225,20 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
             const currentWeekStats = await spamPenaltyService.getCurrentWeekStats(targetUser.id, guildId, channelId);
 
+            // Fetch this week's posts for the user in this channel
+            const activeWeekForChannel = await prisma.week.findFirst({
+              where: { status: 'ACTIVE', monitoredChannelId: channelId },
+              orderBy: { createdAt: 'desc' },
+            });
+            const weekPosts = activeWeekForChannel ? await prisma.post.findMany({
+              where: {
+                authorId: targetUser.id,
+                monitoredChannelId: channelId,
+                weekId: activeWeekForChannel.id,
+              },
+              orderBy: { createdAt: 'asc' },
+            }) : [];
+
             let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
             if (postLimitCheck.penaltyBalance > 0) {
               channelStatus += `\nPenalty balance: **-${postLimitCheck.penaltyBalance}** (limit reduced)`;
@@ -2234,6 +2248,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             }
             if (currentWeekStats.shortlisted > 0) {
               channelStatus += `\nShortlisted this week: **${currentWeekStats.shortlisted}** (+${currentWeekStats.shortlisted} recovery)`;
+            }
+            if (weekPosts.length > 0) {
+              channelStatus += '\n' + weekPosts.map((p, i) => `Post ${i + 1}: ${p.link}`).join('\n');
             }
 
             embed.addFields({ name: `#${channelName}`, value: channelStatus });

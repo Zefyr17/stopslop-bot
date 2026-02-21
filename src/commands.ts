@@ -262,7 +262,15 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')
-        .setDescription('Show all users with active penalties and their posts')),
+        .setDescription('Show all users with active penalties and their posts'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('clear-link')
+        .setDescription('Clear duplicate link block so a user can repost it in correct channel')
+        .addStringOption(option =>
+          option.setName('link')
+            .setDescription('The link to unblock')
+            .setRequired(true))),
 
   new SlashCommandBuilder()
     .setName('weight')

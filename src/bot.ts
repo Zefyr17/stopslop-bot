@@ -2438,6 +2438,42 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
         return;
       }
+
+      if (subcommand === 'clear-link') {
+        const link = interaction.options.getString('link', true);
+        try {
+          const { createLinkHash } = await import('./utils/linkNormalizer');
+          const linkHash = createLinkHash(link);
+
+          const post = await prisma.post.findUnique({ where: { linkHash } });
+          if (!post) {
+            await interaction.reply({ content: `❌ No post found with that link in the database.`, ephemeral: true });
+            return;
+          }
+
+          await prisma.post.update({
+            where: { linkHash },
+            data: { linkHash: `cleared_${Date.now()}_${linkHash}` },
+          });
+
+          console.log(`[ClearLink] Link unblocked by ${interaction.user.tag}: ${link} (hash: ${linkHash}, post: ${post.id})`);
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+            oderId: post.authorId,
+            adminId: interaction.user.id,
+            details: `Duplicate link block cleared for <@${post.authorId}> by <@${interaction.user.id}>.\nLink: ${link}`,
+          });
+
+          await interaction.reply({
+            content: `✅ Link unblocked. <@${post.authorId}> can now repost it in the correct channel.\n\`${link}\``,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam clear-link:', error);
+          await interaction.reply({ content: '❌ Failed to clear link.', ephemeral: true });
+        }
+        return;
+      }
     }
     if (commandName === 'weight') {
       const subcommand = interaction.options.getSubcommand();

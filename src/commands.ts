@@ -270,6 +270,18 @@ export const commands = [
         .addStringOption(option =>
           option.setName('link')
             .setDescription('The link to unblock')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('add-penalty')
+        .setDescription('Manually add a spam penalty to a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to penalize')
+            .setRequired(true))
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel to apply the penalty to')
             .setRequired(true))),
 
   new SlashCommandBuilder()

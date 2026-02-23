@@ -2474,6 +2474,49 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
         return;
       }
+
+      if (subcommand === 'add-penalty') {
+        const targetUser = interaction.options.getUser('user', true);
+        const channel = interaction.options.getChannel('channel', true);
+        try {
+          const activeWeek = await prisma.week.findFirst({
+            where: { status: 'ACTIVE', monitoredChannelId: channel.id },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (!activeWeek) {
+            await interaction.reply({ content: `❌ No active week found for <#${channel.id}>.`, ephemeral: true });
+            return;
+          }
+
+          const fakePostId = `manual_${Date.now()}_${targetUser.id}`;
+          await prisma.spamPenalty.create({
+            data: {
+              oderId: targetUser.id,
+              guildId,
+              postId: fakePostId,
+              weekId: activeWeek.id,
+            },
+          });
+
+          console.log(`[SpamPenalty] Manual penalty added for ${targetUser.tag} in channel ${channel.id} by ${interaction.user.tag}`);
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_ADDED, {
+            oderId: targetUser.id,
+            adminId: interaction.user.id,
+            details: `Manual penalty added for <@${targetUser.id}> in <#${channel.id}> by <@${interaction.user.id}>`,
+          });
+
+          await interaction.reply({
+            content: `✅ Penalty added for <@${targetUser.id}> in <#${channel.id}>.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam add-penalty:', error);
+          await interaction.reply({ content: '❌ Failed to add penalty.', ephemeral: true });
+        }
+        return;
+      }
     }
     if (commandName === 'weight') {
       const subcommand = interaction.options.getSubcommand();

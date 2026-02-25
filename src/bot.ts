@@ -328,24 +328,25 @@ bot.on(Events.MessageCreate, async (message) => {
     if (!postLimitCheck.canPost) {
       console.log(`[SpamPenalty] User ${message.author.id} blocked from posting in ${message.channelId}. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
 
-      // Delete the message and notify user via DM
+      // Reply in channel before deleting so the user sees it
+      try {
+        let replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
+        if (postLimitCheck.penaltyBalance > 0) {
+          replyText += ` Your limit is reduced due to past penalties — get your posts shortlisted to recover +1 slot per shortlist.`;
+        }
+        const replyMsg = await message.reply({ content: replyText, allowedMentions: { repliedUser: false } });
+        // Auto-delete the reply after 10 seconds
+        setTimeout(() => replyMsg.delete().catch(() => {}), 10000);
+      } catch (replyError) {
+        console.error('Failed to send post-limit reply:', replyError);
+      }
+
+      // Delete the message
       try {
         await message.delete();
         console.log(`Deleted post-limit message from ${message.author.tag} in channel ${message.channelId}`);
       } catch (deleteError) {
         console.error('Failed to delete post-limit message:', deleteError);
-      }
-
-      try {
-        let dmText = `🚫 **Post limit reached.**\n\nYour message in **${message.guild?.name}** was deleted because you've already posted **${postLimitCheck.currentCount}/${postLimitCheck.limit}** this week.`;
-
-        if (postLimitCheck.penaltyBalance > 0) {
-          dmText += `\n\nYour limit is reduced to **${postLimitCheck.limit}/${config.defaultPostLimit}** due to past penalties. Get your posts shortlisted to earn back +1 post slot per shortlist.`;
-        }
-
-        await message.author.send(dmText);
-      } catch (dmError) {
-        console.log(`Could not DM user ${message.author.tag} about post limit (DMs might be closed)`);
       }
 
       // Log to mod_log
@@ -377,6 +378,27 @@ bot.on(Events.MessageCreate, async (message) => {
 
     console.log(`Created post ${post.id} for link: ${link}`);
     console.log(`Post created in week ${post.weekId} for channel ${message.channelId}`);
+
+    // Warn user if they are running low on posts
+    const newCount = postLimitCheck.currentCount + 1;
+    const remaining = postLimitCheck.limit - newCount;
+    if (remaining === 0) {
+      try {
+        const warnMsg = await message.reply({
+          content: `<@${message.author.id}> You have used your last post slot (**${newCount}/${postLimitCheck.limit}**) for this week. You cannot post any more content this week.`,
+          allowedMentions: { repliedUser: false },
+        });
+        setTimeout(() => warnMsg.delete().catch(() => {}), 10000);
+      } catch {}
+    } else if (remaining === 1) {
+      try {
+        const warnMsg = await message.reply({
+          content: `<@${message.author.id}> You have used **${newCount}/${postLimitCheck.limit}** posts this week. You have **1 post remaining**.`,
+          allowedMentions: { repliedUser: false },
+        });
+        setTimeout(() => warnMsg.delete().catch(() => {}), 10000);
+      } catch {}
+    }
 
     const upvoteButton = new ButtonBuilder()
       .setCustomId(`upvote_${post.id}`)
@@ -2451,21 +2473,22 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             return;
           }
 
-          await prisma.post.update({
-            where: { linkHash },
-            data: { linkHash: `cleared_${Date.now()}_${linkHash}` },
-          });
+          // Delete votes, ratings and spam penalties tied to this post, then delete the post itself
+          await prisma.vote.deleteMany({ where: { postId: post.id } });
+          await prisma.rating.deleteMany({ where: { postId: post.id } });
+          await prisma.spamPenalty.deleteMany({ where: { postId: post.id } });
+          await prisma.post.delete({ where: { id: post.id } });
 
-          console.log(`[ClearLink] Link unblocked by ${interaction.user.tag}: ${link} (hash: ${linkHash}, post: ${post.id})`);
+          console.log(`[ClearLink] Post deleted and link unblocked by ${interaction.user.tag}: ${link} (hash: ${linkHash}, post: ${post.id})`);
 
           await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
             oderId: post.authorId,
             adminId: interaction.user.id,
-            details: `Duplicate link block cleared for <@${post.authorId}> by <@${interaction.user.id}>.\nLink: ${link}`,
+            details: `Duplicate link block cleared for <@${post.authorId}> by <@${interaction.user.id}>. Post removed from database.\nLink: ${link}`,
           });
 
           await interaction.reply({
-            content: `✅ Link unblocked. <@${post.authorId}> can now repost it in the correct channel.\n\`${link}\``,
+            content: `✅ Link unblocked and post removed. <@${post.authorId}> can now repost it in the correct channel and their post count has been restored.\n\`${link}\``,
             ephemeral: true,
           });
         } catch (error) {

@@ -2342,6 +2342,39 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
+      if (subcommand === 'remove-post') {
+        const postId = interaction.options.getString('post_id', true);
+        try {
+          const post = await prisma.post.findUnique({ where: { id: postId } });
+          if (!post) {
+            await interaction.reply({ content: `❌ No post found with ID \`${postId}\`.`, ephemeral: true });
+            return;
+          }
+
+          await prisma.vote.deleteMany({ where: { postId: post.id } });
+          await prisma.rating.deleteMany({ where: { postId: post.id } });
+          await prisma.spamPenalty.deleteMany({ where: { postId: post.id } });
+          await prisma.post.delete({ where: { id: post.id } });
+
+          console.log(`[RemovePost] Post ${post.id} deleted by ${interaction.user.tag} (author: ${post.authorId}, link: ${post.link})`);
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+            oderId: post.authorId,
+            adminId: interaction.user.id,
+            details: `Post removed from database by <@${interaction.user.id}> for <@${post.authorId}>. Post slot restored.\nLink: ${post.link}`,
+          });
+
+          await interaction.reply({
+            content: `✅ Post removed. <@${post.authorId}>'s post count has been restored.\nLink: \`${post.link}\``,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam remove-post:', error);
+          await interaction.reply({ content: '❌ Failed to remove post.', ephemeral: true });
+        }
+        return;
+      }
+
       if (subcommand === 'list') {
         try {
           await interaction.deferReply({ ephemeral: true });

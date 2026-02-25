@@ -261,6 +261,14 @@ export const commands = [
             .setRequired(true)))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('remove-post')
+        .setDescription('Remove a post from the database by ID (restores post slot)')
+        .addStringOption(option =>
+          option.setName('post_id')
+            .setDescription('Post ID to remove (visible in /spam check)')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('list')
         .setDescription('Show all users with active penalties and their posts'))
     .addSubcommand(subcommand =>

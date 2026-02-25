@@ -2272,7 +2272,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               channelStatus += `\nShortlisted this week: **${currentWeekStats.shortlisted}** (+${currentWeekStats.shortlisted} recovery)`;
             }
             if (weekPosts.length > 0) {
-              channelStatus += '\n' + weekPosts.map((p, i) => `Post ${i + 1}: ${p.link}`).join('\n');
+              channelStatus += '\n' + weekPosts.map((p, i) => `Post ${i + 1}: ${p.link}\n┗ ID: \`${p.id}\``).join('\n');
             }
 
             embed.addFields({ name: `#${channelName}`, value: channelStatus });

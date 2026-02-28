@@ -322,19 +322,15 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('draw')
-        .setDescription('Draw raffle winners from current ticket pool (Admin only)'))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('role')
-        .setDescription('Set the role to assign to raffle winners (Admin only)')
-        .addRoleOption(option =>
-          option.setName('role')
-            .setDescription('The Discord role to give to winners')
-            .setRequired(true)))
+        .setDescription('Draw 5 random raffle winners and award quality guard tickets (Admin only)'))
     .addSubcommand(subcommand =>
       subcommand
         .setName('badges')
-        .setDescription('Show raffle win counts')),
+        .setDescription('Show accumulated quality guard tickets and raffle wins')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to check (leave empty to check yourself)')
+            .setRequired(false))),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

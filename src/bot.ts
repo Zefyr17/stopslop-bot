@@ -2650,83 +2650,32 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
     if (commandName === 'raffle') {
       const subcommand = interaction.options.getSubcommand();
 
-      if (subcommand === 'role') {
-        const role = interaction.options.getRole('role', true);
-        try {
-          await guildConfigService.getOrCreateConfig(guildId);
-          await guildConfigService.setRaffleRole(guildId, role.id);
-
-          await modLogService.log(guildId, ModLogEventType.RAFFLE_ROLE_SET, {
-            adminId: interaction.user.id,
-            details: `Raffle role set to <@&${role.id}>`,
-          });
-
-          await interaction.reply({
-            content: `✅ Raffle winner role set to <@&${role.id}>`,
-            ephemeral: true,
-          });
-        } catch (error) {
-          console.error('Error in raffle role:', error);
-          await interaction.reply({ content: '❌ Failed to set raffle role.', ephemeral: true });
-        }
-        return;
-      }
-
       if (subcommand === 'draw') {
         await interaction.deferReply();
 
         try {
-          const config = await guildConfigService.getConfig(guildId);
-          if (!config?.raffleRoleId) {
-            await interaction.editReply({ content: '❌ No raffle role configured. Use `/raffle role @role` first.' });
-            return;
-          }
-
           const result = await raffleService.drawWinners(guildId, interaction.user.id, 5);
 
-          // Remove raffle role from previous winners
-          const guild = interaction.guild!;
-          const raffleRole = await guild.roles.fetch(config.raffleRoleId);
-          if (raffleRole) {
-            for (const [, member] of raffleRole.members) {
-              try {
-                await member.roles.remove(config.raffleRoleId);
-              } catch (e) {
-                console.error(`Failed to remove raffle role from ${member.id}:`, e);
-              }
-            }
-          }
-
-          // Assign raffle role to new winners
-          for (const winner of result.winners) {
-            try {
-              const winnerMember = await guild.members.fetch(winner.oderId);
-              await winnerMember.roles.add(config.raffleRoleId);
-            } catch (e) {
-              console.error(`Failed to assign raffle role to ${winner.oderId}:`, e);
-            }
-          }
-
-          // Build announcement embed
           const embed = new EmbedBuilder()
             .setColor(0xFFD700)
             .setTitle('🎉 Raffle Winners!')
             .setTimestamp();
 
           const winnerLines = result.winners.map((w, i) =>
-            `${i + 1}. <@${w.oderId}> (${w.tickets} ticket${w.tickets !== 1 ? 's' : ''})`
+            `${i + 1}. <@${w.oderId}> — +**${w.ticketsAwarded}** quality guard ticket${w.ticketsAwarded !== 1 ? 's' : ''}`
           );
           embed.setDescription(winnerLines.join('\n'));
           embed.addFields(
             { name: 'Participants', value: result.totalParticipants.toString(), inline: true },
-            { name: 'Total Tickets', value: result.totalTickets.toString(), inline: true },
+            { name: 'Posts This Week', value: result.totalPosts.toString(), inline: true },
+            { name: 'Tickets Per Winner', value: result.ticketsPerWinner.toString(), inline: true },
           );
-          embed.setFooter({ text: 'Tickets have been reset. New tickets start accumulating now!' });
+          embed.setFooter({ text: 'Quality guard tickets accumulate over time. Use /raffle badges to check your total.' });
 
           await modLogService.log(guildId, ModLogEventType.RAFFLE_DRAWN, {
             adminId: interaction.user.id,
-            winners: result.winners,
-            details: `Raffle drawn with ${result.totalParticipants} participants and ${result.totalTickets} total tickets.`,
+            winners: result.winners.map(w => ({ oderId: w.oderId, tickets: w.ticketsAwarded })),
+            details: `Raffle drawn. ${result.totalParticipants} participants, ${result.totalPosts} posts this week, ${result.ticketsPerWinner} tickets per winner.`,
           });
 
           await interaction.editReply({ embeds: [embed] });
@@ -2741,26 +2690,26 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'badges') {
         try {
-          await interaction.deferReply();
+          await interaction.deferReply({ ephemeral: false });
 
-          const winCounts = await raffleService.getWinCounts(guildId);
-
-          if (winCounts.length === 0) {
-            await interaction.editReply({ content: 'No raffle winners yet!' });
-            return;
-          }
+          const targetUser = interaction.options.getUser('user') ?? interaction.user;
+          const allTickets = await raffleService.getQualityGuardTickets(guildId);
+          const userEntry = allTickets.find(t => t.oderId === targetUser.id);
 
           const embed = new EmbedBuilder()
             .setColor(0xFFD700)
-            .setTitle('Raffle Badges')
+            .setTitle(`🎫 Quality Guard Tickets — ${targetUser.username}`)
+            .setThumbnail(targetUser.displayAvatarURL())
             .setTimestamp();
 
-          const lines = winCounts.slice(0, 15).map((entry, i) => {
-            const badges = '🏆'.repeat(Math.min(entry.wins, 10));
-            return `${i + 1}. <@${entry.oderId}> — ${entry.wins} win${entry.wins !== 1 ? 's' : ''} ${badges}`;
-          });
+          if (!userEntry || userEntry.tickets === 0) {
+            embed.setDescription('No quality guard tickets yet. Win a raffle to earn tickets!');
+          } else {
+            embed.setDescription(
+              `**Tickets:** ${userEntry.tickets}\n**Raffle wins:** ${userEntry.wins}`
+            );
+          }
 
-          embed.setDescription(lines.join('\n'));
           await interaction.editReply({ embeds: [embed] });
         } catch (error) {
           console.error('Error in raffle badges:', error);

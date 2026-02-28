@@ -10,9 +10,10 @@ export interface TicketHolder {
 
 export interface RaffleResult {
   raffleId: string;
-  winners: Array<{ oderId: string; tickets: number }>;
+  winners: Array<{ oderId: string; ticketsAwarded: number }>;
   totalParticipants: number;
-  totalTickets: number;
+  ticketsPerWinner: number;
+  totalPosts: number;
 }
 
 export class RaffleService {
@@ -24,14 +25,13 @@ export class RaffleService {
   }
 
   /**
-   * Count correct votes per user since the last raffle.
+   * Count correct votes (successful votes) per user since the last raffle.
    * Scoped to this guild's monitored channels.
    */
   async getTicketHolders(guildId: string): Promise<TicketHolder[]> {
     const lastRaffle = await this.getLastRaffle(guildId);
     const cutoffDate = lastRaffle?.drawnAt ?? null;
 
-    // Get monitored channel IDs for this guild
     const channelPairs = await prisma.channelPair.findMany({
       where: { guildConfig: { guildId } },
       select: { monitoredChannelId: true },
@@ -40,7 +40,6 @@ export class RaffleService {
 
     if (monitoredChannelIds.length === 0) return [];
 
-    // Query votes on decided posts in this guild's channels, since cutoff
     const whereClause: any = {
       post: {
         status: { in: [PostStatus.SHORTLISTED, PostStatus.REJECTED] },
@@ -59,7 +58,6 @@ export class RaffleService {
       },
     });
 
-    // Group by user and count correct votes
     const userMap = new Map<string, { correct: number; total: number }>();
     for (const vote of votes) {
       const oderId = vote.user.discordId;
@@ -87,76 +85,119 @@ export class RaffleService {
   }
 
   /**
-   * Draw weighted-random winners. More tickets = higher chance.
-   * Persists Raffle + RaffleWinner records. Ticket window resets implicitly.
+   * Count total posts this week across all monitored channels for this guild.
+   * Used to calculate the quality guard ticket pool.
+   */
+  async getTotalPostsThisWeek(guildId: string): Promise<number> {
+    const channelPairs = await prisma.channelPair.findMany({
+      where: { guildConfig: { guildId } },
+      select: { monitoredChannelId: true },
+    });
+    const monitoredChannelIds = channelPairs.map(cp => cp.monitoredChannelId);
+
+    if (monitoredChannelIds.length === 0) return 0;
+
+    // Find active weeks for these channels
+    const activeWeeks = await prisma.week.findMany({
+      where: {
+        status: 'ACTIVE',
+        monitoredChannelId: { in: monitoredChannelIds },
+      },
+      select: { id: true },
+    });
+
+    if (activeWeeks.length === 0) return 0;
+
+    return prisma.post.count({
+      where: {
+        weekId: { in: activeWeeks.map(w => w.id) },
+        monitoredChannelId: { in: monitoredChannelIds },
+      },
+    });
+  }
+
+  /**
+   * Draw up to 5 random winners (unweighted) from users with successful votes.
+   * Each winner receives an equal share of the quality guard ticket pool.
+   * Pool = totalPosts / winnerCount (rounded, min 1 per winner).
+   * Tickets are accumulated in QualityGuardTicket table.
    */
   async drawWinners(guildId: string, drawnBy: string, winnerCount: number = 5): Promise<RaffleResult> {
     const holders = await this.getTicketHolders(guildId);
 
     if (holders.length === 0) {
-      throw new Error('No users have tickets for the raffle.');
+      throw new Error('No users have successful votes for the raffle.');
     }
 
+    const totalPosts = await this.getTotalPostsThisWeek(guildId);
     const actualWinnerCount = Math.min(winnerCount, holders.length);
-    const winners: Array<{ oderId: string; tickets: number }> = [];
+    const ticketsPerWinner = Math.max(1, Math.round(totalPosts / actualWinnerCount));
+
+    // Pick winners randomly (unweighted) — shuffle and take first N
     const pool = [...holders];
-
-    for (let i = 0; i < actualWinnerCount; i++) {
-      const totalTickets = pool.reduce((sum, h) => sum + h.tickets, 0);
-      let random = Math.floor(Math.random() * totalTickets);
-
-      let winnerIndex = 0;
-      for (let j = 0; j < pool.length; j++) {
-        random -= pool[j].tickets;
-        if (random < 0) {
-          winnerIndex = j;
-          break;
-        }
-      }
-
-      const winner = pool.splice(winnerIndex, 1)[0];
-      winners.push({ oderId: winner.oderId, tickets: winner.tickets });
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
+    const selectedWinners = pool.slice(0, actualWinnerCount);
 
+    // Persist raffle draw record
     const raffle = await prisma.raffle.create({
       data: {
         guildId,
         drawnBy,
         winners: {
-          create: winners.map(w => ({
+          create: selectedWinners.map(w => ({
             oderId: w.oderId,
-            tickets: w.tickets,
+            tickets: ticketsPerWinner,
           })),
         },
       },
       include: { winners: true },
     });
 
+    // Accumulate quality guard tickets for each winner
+    for (const winner of selectedWinners) {
+      await prisma.qualityGuardTicket.upsert({
+        where: { oderId_guildId: { oderId: winner.oderId, guildId } },
+        update: { tickets: { increment: ticketsPerWinner } },
+        create: { oderId: winner.oderId, guildId, tickets: ticketsPerWinner },
+      });
+    }
+
     return {
       raffleId: raffle.id,
-      winners,
+      winners: selectedWinners.map(w => ({ oderId: w.oderId, ticketsAwarded: ticketsPerWinner })),
       totalParticipants: holders.length,
-      totalTickets: holders.reduce((sum, h) => sum + h.tickets, 0),
+      ticketsPerWinner,
+      totalPosts,
     };
   }
 
   /**
-   * Get total raffle wins per user across all raffles in this guild.
+   * Get accumulated quality guard tickets per user for /raffle badges.
    */
-  async getWinCounts(guildId: string): Promise<Array<{ oderId: string; wins: number }>> {
-    const winners = await prisma.raffleWinner.findMany({
+  async getQualityGuardTickets(guildId: string): Promise<Array<{ oderId: string; tickets: number; wins: number }>> {
+    const ticketRows = await prisma.qualityGuardTicket.findMany({
+      where: { guildId },
+      orderBy: { tickets: 'desc' },
+    });
+
+    // Also count raffle wins per user
+    const allWinners = await prisma.raffleWinner.findMany({
       where: { raffle: { guildId } },
       select: { oderId: true },
     });
-
-    const countMap = new Map<string, number>();
-    for (const w of winners) {
-      countMap.set(w.oderId, (countMap.get(w.oderId) ?? 0) + 1);
+    const winMap = new Map<string, number>();
+    for (const w of allWinners) {
+      winMap.set(w.oderId, (winMap.get(w.oderId) ?? 0) + 1);
     }
 
-    return Array.from(countMap.entries())
-      .map(([oderId, wins]) => ({ oderId, wins }))
-      .sort((a, b) => b.wins - a.wins);
+    return ticketRows.map(row => ({
+      oderId: row.oderId,
+      tickets: row.tickets,
+      wins: winMap.get(row.oderId) ?? 0,
+    }));
   }
 }
 

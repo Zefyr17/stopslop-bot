@@ -160,6 +160,18 @@ model RaffleWinner {
   @@unique([raffleId, oderId])
 }
 
+// Tracks accumulated quality guard tickets per user across all raffles
+model QualityGuardTicket {
+  id        String   @id @default(cuid())
+  oderId    String
+  guildId   String
+  tickets   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([oderId, guildId])
+}
+
 // Tracks spam penalties per post (one penalty per post max)
 model SpamPenalty {
   id        String   @id @default(cuid())

@@ -2170,29 +2170,25 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           const holders = await raffleService.getTicketHolders(guildId);
 
-          if (holders.length === 0) {
-            await interaction.editReply({ content: 'No successful votes yet since the last raffle. Vote correctly on decided posts to appear here!' });
-            return;
-          }
-
           const embed = new EmbedBuilder()
             .setColor(0x5865F2)
             .setTitle('Successful Votes Leaderboard')
             .setTimestamp();
 
-          const lines: string[] = [];
-          const topHolders = holders.slice(0, 10);
-
-          for (let i = 0; i < topHolders.length; i++) {
-            const holder = topHolders[i];
-            const rank = i + 1;
-            const accuracyStr = holder.accuracy.toFixed(0);
-            lines.push(
-              `${rank}. <@${holder.oderId}> — ${holder.tickets} vote${holder.tickets !== 1 ? 's' : ''} (${accuracyStr}% of ${holder.totalVotes} votes)`
-            );
+          if (holders.length === 0) {
+            embed.setDescription('No successful votes yet. Vote correctly on decided posts to appear here!');
+          } else {
+            const lines: string[] = [];
+            const topHolders = holders.slice(0, 10);
+            for (let i = 0; i < topHolders.length; i++) {
+              const holder = topHolders[i];
+              const accuracyStr = holder.accuracy.toFixed(0);
+              lines.push(
+                `${i + 1}. <@${holder.oderId}> — ${holder.tickets} vote${holder.tickets !== 1 ? 's' : ''} (${accuracyStr}% of ${holder.totalVotes} votes)`
+              );
+            }
+            embed.setDescription(lines.join('\n'));
           }
-
-          embed.setDescription(lines.join('\n'));
 
           const lastRaffle = await raffleService.getLastRaffle(guildId);
           if (lastRaffle) {
@@ -2692,22 +2688,36 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         try {
           await interaction.deferReply({ ephemeral: false });
 
-          const targetUser = interaction.options.getUser('user') ?? interaction.user;
+          const targetUser = interaction.options.getUser('user');
           const allTickets = await raffleService.getQualityGuardTickets(guildId);
-          const userEntry = allTickets.find(t => t.oderId === targetUser.id);
 
           const embed = new EmbedBuilder()
             .setColor(0xFFD700)
-            .setTitle(`🎫 Quality Guard Tickets — ${targetUser.username}`)
-            .setThumbnail(targetUser.displayAvatarURL())
             .setTimestamp();
 
-          if (!userEntry || userEntry.tickets === 0) {
-            embed.setDescription('No quality guard tickets yet. Win a raffle to earn tickets!');
+          if (targetUser) {
+            // Show specific user
+            const userEntry = allTickets.find(t => t.oderId === targetUser.id);
+            embed.setTitle(`🎫 Quality Guard Tickets — ${targetUser.username}`);
+            embed.setThumbnail(targetUser.displayAvatarURL());
+            if (!userEntry || userEntry.tickets === 0) {
+              embed.setDescription('No quality guard tickets yet. Win a raffle to earn tickets!');
+            } else {
+              embed.setDescription(
+                `**Tickets:** ${userEntry.tickets}\n**Raffle wins:** ${userEntry.wins}`
+              );
+            }
           } else {
-            embed.setDescription(
-              `**Tickets:** ${userEntry.tickets}\n**Raffle wins:** ${userEntry.wins}`
-            );
+            // Show top leaderboard
+            embed.setTitle('🎫 Quality Guard Tickets Leaderboard');
+            if (allTickets.length === 0) {
+              embed.setDescription('No quality guard tickets awarded yet. Run `/raffle draw` to start!');
+            } else {
+              const lines = allTickets.slice(0, 15).map((entry, i) =>
+                `${i + 1}. <@${entry.oderId}> — **${entry.tickets}** ticket${entry.tickets !== 1 ? 's' : ''} (${entry.wins} win${entry.wins !== 1 ? 's' : ''})`
+              );
+              embed.setDescription(lines.join('\n'));
+            }
           }
 
           await interaction.editReply({ embeds: [embed] });

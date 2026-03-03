@@ -2171,13 +2171,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const holders = await raffleService.getTicketHolders(guildId);
 
           if (holders.length === 0) {
-            await interaction.editReply({ content: 'No tickets earned yet since the last raffle. Correct votes on decided posts = tickets!' });
+            await interaction.editReply({ content: 'No successful votes yet since the last raffle. Vote correctly on decided posts to appear here!' });
             return;
           }
 
           const embed = new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('Raffle Tickets Leaderboard')
+            .setTitle('Successful Votes Leaderboard')
             .setTimestamp();
 
           const lines: string[] = [];
@@ -2188,7 +2188,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const rank = i + 1;
             const accuracyStr = holder.accuracy.toFixed(0);
             lines.push(
-              `${rank}. <@${holder.oderId}> — ${holder.tickets} ticket${holder.tickets !== 1 ? 's' : ''} (${accuracyStr}% of ${holder.totalVotes} votes)`
+              `${rank}. <@${holder.oderId}> — ${holder.tickets} vote${holder.tickets !== 1 ? 's' : ''} (${accuracyStr}% of ${holder.totalVotes} votes)`
             );
           }
 
@@ -2196,9 +2196,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           const lastRaffle = await raffleService.getLastRaffle(guildId);
           if (lastRaffle) {
-            embed.setFooter({ text: `Tickets since: ${lastRaffle.drawnAt.toISOString().split('T')[0]}` });
+            embed.setFooter({ text: `Since: ${lastRaffle.drawnAt.toISOString().split('T')[0]}` });
           } else {
-            embed.setFooter({ text: 'Tickets since: all time (no raffle drawn yet)' });
+            embed.setFooter({ text: 'Since: all time (no raffle drawn yet)' });
           }
 
           await interaction.editReply({ embeds: [embed] });

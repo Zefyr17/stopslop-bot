@@ -121,6 +121,10 @@ export const commands = [
     .addChannelOption(option =>
       option.setName('monitored')
         .setDescription('Filter results by monitored channel (optional)')
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('week_id')
+        .setDescription('Week ID for closed weeks (visible in mod log)')
         .setRequired(false)),
 
   new SlashCommandBuilder()

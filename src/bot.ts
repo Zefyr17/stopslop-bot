@@ -1057,37 +1057,45 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
-      // Get optional monitored channel filter
+      // Get optional filters
       const monitoredChannel = interaction.options.getChannel('monitored', false);
+      const weekIdParam = interaction.options.getString('week_id', false);
 
-      // Get active week for the specific channel (or global if no channel specified)
-      const activeWeek = await (await import('./services/WeekService')).weekService.getActiveWeek(monitoredChannel?.id);
-      if (!activeWeek) {
-        await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
-        return;
+      let targetWeek;
+      if (weekIdParam) {
+        // Look up specific week by ID (works for closed weeks too)
+        targetWeek = await prisma.week.findUnique({ where: { id: weekIdParam } });
+        if (!targetWeek) {
+          await interaction.editReply({ content: `❌ No week found with ID \`${weekIdParam}\`.` });
+          return;
+        }
+      } else {
+        // Default: get active week
+        targetWeek = await (await import('./services/WeekService')).weekService.getActiveWeek(monitoredChannel?.id);
+        if (!targetWeek) {
+          await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts, or specify a `week_id` to view a closed week.' });
+          return;
+        }
       }
+
       const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
 
       // Filter posts by week and channel
       let weekPosts = shortlistedPosts.filter(p => {
-        // Must be in the active week
-        if (p.weekId !== activeWeek.id) return false;
-
-        // If channel specified, must match
+        if (p.weekId !== targetWeek!.id) return false;
         if (monitoredChannel && p.monitoredChannelId !== monitoredChannel.id) return false;
-
         return true;
       });
 
       // Check if we have posts
+      const weekLabel = weekIdParam ? `week \`${weekIdParam}\`` : 'this week';
       if (monitoredChannel) {
-
         if (weekPosts.length === 0) {
-          await interaction.editReply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> this week.` });
+          await interaction.editReply({ content: `No shortlisted posts found for <#${monitoredChannel.id}> in ${weekLabel}.` });
           return;
         }
       } else if (weekPosts.length === 0) {
-        await interaction.editReply({ content: 'No shortlisted posts found for this week.' });
+        await interaction.editReply({ content: `No shortlisted posts found for ${weekLabel}.` });
         return;
       }
 

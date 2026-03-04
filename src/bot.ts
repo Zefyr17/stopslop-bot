@@ -1489,27 +1489,23 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'close') {
         try {
-          // Get optional monitored channel parameter
-          const monitoredChannel = interaction.options.getChannel('monitored', false);
-          const monitoredChannelId = monitoredChannel?.id;
+          const monitoredChannel = interaction.options.getChannel('monitored', true);
+          const monitoredChannelId = monitoredChannel.id;
 
-          // Get active week for this channel (or global if no channel specified)
           const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
           if (!activeWeek) {
-            await interaction.reply({ content: 'No active voting period to close.', ephemeral: true });
+            await interaction.reply({ content: `No active voting period to close for <#${monitoredChannelId}>.`, ephemeral: true });
             return;
           }
           const allPosts = await postService.getPostsByWeek(activeWeek.id);
 
-          // Close the week
           const closedWeek = await weekService.closeActiveWeek(monitoredChannelId);
 
-          // Format dates for logging
           const startDate = closedWeek.startDate.toISOString().split('T')[0];
           const endDate = closedWeek.endDate.toISOString().split('T')[0];
 
-          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
-          const channelInfoLog = monitoredChannel ? ` for channel <#${monitoredChannel.id}>` : ' (all channels)';
+          const channelInfo = ` for <#${monitoredChannelId}>`;
+          const channelInfoLog = ` for channel <#${monitoredChannelId}>`;
 
           // Log to mod_log
           await modLogService.log(guildId, ModLogEventType.WEEK_CLOSED, {
@@ -1538,12 +1534,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'start') {
         try {
-          // Get optional monitored channel parameter
-          const monitoredChannel = interaction.options.getChannel('monitored', false);
-          const monitoredChannelId = monitoredChannel?.id;
+          const monitoredChannel = interaction.options.getChannel('monitored', true);
+          const monitoredChannelId = monitoredChannel.id;
 
-          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
-          const channelInfoLog = monitoredChannel ? ` for channel <#${monitoredChannel.id}>` : ' (all channels)';
+          const channelInfo = ` for <#${monitoredChannelId}>`;
+          const channelInfoLog = ` for channel <#${monitoredChannelId}>`;
 
           // Start new voting period
           const newWeek = await weekService.startNewWeek(monitoredChannelId);

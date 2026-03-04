@@ -164,16 +164,16 @@ export const commands = [
         .setDescription('Close current voting period and stop accepting posts (Admin only)')
         .addChannelOption(option =>
           option.setName('monitored')
-            .setDescription('Monitored channel to close period for (optional - closes all if not specified)')
-            .setRequired(false)))
+            .setDescription('Monitored channel to close the voting period for')
+            .setRequired(true)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('start')
         .setDescription('Start a new voting period and begin accepting posts (Admin only)')
         .addChannelOption(option =>
           option.setName('monitored')
-            .setDescription('Monitored channel to start period for (optional - starts for all if not specified)')
-            .setRequired(false))),
+            .setDescription('Monitored channel to start the voting period for')
+            .setRequired(true))),
 
   new SlashCommandBuilder()
     .setName('ranking')

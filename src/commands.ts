@@ -335,6 +335,13 @@ export const commands = [
           option.setName('user')
             .setDescription('User to check (leave empty to check yourself)')
             .setRequired(false))),
+  new SlashCommandBuilder()
+    .setName('parse-message')
+    .setDescription('Parse @usernames + XP from pasted text and generate /give-xp commands')
+    .addStringOption(option =>
+      option.setName('text')
+        .setDescription('Paste the full announcement text with @usernames and XP amounts')
+        .setRequired(true)),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

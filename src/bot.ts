@@ -2735,6 +2735,67 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
     }
+
+    if (commandName === 'parse-message') {
+      await interaction.deferReply({ ephemeral: true });
+      try {
+        const text = interaction.options.getString('text', true);
+
+        // Extract pairs: one or more @usernames followed by a number (XP)
+        // Handles: "@user1 5000", "@user1 & @user2 5000", "@user1 & @user2 & @user3 5000"
+        const lines = text.split('\n').filter(l => l.includes('@'));
+
+        // Fetch all guild members
+        await interaction.guild!.members.fetch();
+        const members = interaction.guild!.members.cache;
+
+        const giveCmds: string[] = [];
+        const notFound: string[] = [];
+
+        for (const line of lines) {
+          // Extract all @usernames from this line
+          const usernames = [...line.matchAll(/@([\w.|]+)/g)].map(m => m[1]);
+          // Extract XP number from this line (last number found)
+          const xpMatch = line.match(/(\d[\d,]*)\s*(?:XP|xp)?/);
+          const xp = xpMatch ? xpMatch[1].replace(',', '') : '0';
+
+          for (const username of usernames) {
+            const lower = username.toLowerCase();
+            const member = members.find(m =>
+              m.user.username.toLowerCase() === lower ||
+              m.displayName.toLowerCase() === lower ||
+              (m.user.globalName?.toLowerCase() === lower) ||
+              (m.nickname?.toLowerCase() === lower)
+            );
+
+            if (member) {
+              giveCmds.push(`/give-xp <@${member.user.id}> ${xp}`);
+            } else {
+              notFound.push(`@${username} (${xp} XP)`);
+            }
+          }
+        }
+
+        if (giveCmds.length === 0 && notFound.length === 0) {
+          await interaction.editReply({ content: '❌ No @username patterns found in the text.' });
+          return;
+        }
+
+        let output = '';
+        if (giveCmds.length > 0) {
+          output += `**✅ Ready to use (${giveCmds.length}):**\n\`\`\`\n${giveCmds.join('\n')}\n\`\`\`\n`;
+        }
+        if (notFound.length > 0) {
+          output += `**❌ Not found on server (${notFound.length}):**\n${notFound.join('\n')}\n_Check manually — nickname may differ from Discord username._`;
+        }
+
+        await interaction.editReply({ content: output });
+      } catch (error) {
+        console.error('Error in parse-message:', error);
+        await interaction.editReply({ content: '❌ Failed to parse text.' });
+      }
+      return;
+    }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);
     await interaction.reply({ content: 'An error occurred while processing your command.', ephemeral: true });

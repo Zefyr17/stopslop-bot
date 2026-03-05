@@ -2741,54 +2741,49 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       try {
         const text = interaction.options.getString('text', true);
 
-        // Extract pairs: one or more @usernames followed by a number (XP)
-        // Handles: "@user1 5000", "@user1 & @user2 5000", "@user1 & @user2 & @user3 5000"
-        const lines = text.split('\n').filter(l => l.includes('@'));
-
-        // Fetch all guild members
-        await interaction.guild!.members.fetch();
-        const members = interaction.guild!.members.cache;
-
         const giveCmds: string[] = [];
-        const notFound: string[] = [];
+
+        // Process line by line
+        // Skip lines that are just URLs or don't contain @
+        const lines = text.split('\n');
+
+        let currentXp = '0';
 
         for (const line of lines) {
-          // Extract all @usernames from this line
-          const usernames = [...line.matchAll(/@([\w.|]+)/g)].map(m => m[1]);
-          // Extract XP number from this line (last number found)
-          const xpMatch = line.match(/(\d[\d,]*)\s*(?:XP|xp)?/);
-          const xp = xpMatch ? xpMatch[1].replace(',', '') : '0';
+          const trimmed = line.trim();
 
-          for (const username of usernames) {
-            const lower = username.toLowerCase();
-            const member = members.find(m =>
-              m.user.username.toLowerCase() === lower ||
-              m.displayName.toLowerCase() === lower ||
-              (m.user.globalName?.toLowerCase() === lower) ||
-              (m.nickname?.toLowerCase() === lower)
-            );
+          // Skip empty lines and pure URL lines
+          if (!trimmed || /^https?:\/\/\S+$/.test(trimmed)) continue;
 
-            if (member) {
-              giveCmds.push(`/give-xp <@${member.user.id}> ${xp}`);
-            } else {
-              notFound.push(`@${username} (${xp} XP)`);
-            }
+          // Check if line has an XP number (digits followed by optional XP/xp)
+          // Look for number NOT inside a URL — strip URLs first before extracting XP
+          const lineWithoutUrls = trimmed.replace(/https?:\/\/\S+/g, '');
+          const xpMatch = lineWithoutUrls.match(/\b(\d{3,5})\s*(?:XP|xp)?\b/);
+          if (xpMatch) {
+            currentXp = xpMatch[1];
+          }
+
+          // Check for "Honorable Contributions - XXXX XP" style header
+          if (!trimmed.includes('@')) continue;
+
+          // Extract all @usernames — support unicode nicknames by matching everything after @
+          // until whitespace, &, https, or end of meaningful text
+          const usernameMatches = [...trimmed.matchAll(/@([^\s@&\n]+)/g)];
+
+          for (const match of usernameMatches) {
+            const username = match[1].trim().replace(/[,;]+$/, '');
+            // Skip if it looks like a URL fragment
+            if (username.includes('/') || username.includes('http')) continue;
+            giveCmds.push(`/give-xp @${username} ${currentXp}`);
           }
         }
 
-        if (giveCmds.length === 0 && notFound.length === 0) {
+        if (giveCmds.length === 0) {
           await interaction.editReply({ content: '❌ No @username patterns found in the text.' });
           return;
         }
 
-        let output = '';
-        if (giveCmds.length > 0) {
-          output += `**✅ Ready to use (${giveCmds.length}):**\n\`\`\`\n${giveCmds.join('\n')}\n\`\`\`\n`;
-        }
-        if (notFound.length > 0) {
-          output += `**❌ Not found on server (${notFound.length}):**\n${notFound.join('\n')}\n_Check manually — nickname may differ from Discord username._`;
-        }
-
+        const output = `**Parsed ${giveCmds.length} user(s):**\n\`\`\`\n${giveCmds.join('\n')}\n\`\`\``;
         await interaction.editReply({ content: output });
       } catch (error) {
         console.error('Error in parse-message:', error);

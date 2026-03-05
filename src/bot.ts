@@ -2774,7 +2774,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const username = match[1].trim().replace(/[,;]+$/, '');
             // Skip if it looks like a URL fragment
             if (username.includes('/') || username.includes('http')) continue;
-            giveCmds.push(`/give-xp @${username} ${currentXp}`);
+            giveCmds.push(`/give-xp member:@${username} amount:${currentXp}`);
           }
         }
 

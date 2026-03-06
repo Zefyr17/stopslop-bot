@@ -2742,49 +2742,75 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const text = interaction.options.getString('text', true);
 
         const giveCmds: string[] = [];
-
-        // Process line by line
-        // Skip lines that are just URLs or don't contain @
         const lines = text.split('\n');
 
-        let currentXp = '0';
+        // Detect format: numbered list (#1. user1, user2, user3)
+        const isNumberedFormat = lines.some(l => /^#\d+\./.test(l.trim()));
 
-        for (const line of lines) {
-          const trimmed = line.trim();
+        if (isNumberedFormat) {
+          // Format: #1. user1, user2, user3 — XP = 2500 - (place-1)*250
+          for (const line of lines) {
+            const trimmed = line.trim();
+            const placeMatch = trimmed.match(/^#(\d+)\.\s*(.+)/);
+            if (!placeMatch) continue;
 
-          // Skip empty lines and pure URL lines
-          if (!trimmed || /^https?:\/\/\S+$/.test(trimmed)) continue;
+            const place = parseInt(placeMatch[1]);
+            const xp = Math.max(0, 2500 - (place - 1) * 250);
+            const usersPart = placeMatch[2];
 
-          // Check if line has an XP number (digits followed by optional XP/xp)
-          // Look for number NOT inside a URL — strip URLs first before extracting XP
-          const lineWithoutUrls = trimmed.replace(/https?:\/\/\S+/g, '');
-          const xpMatch = lineWithoutUrls.match(/\b(\d{3,5})\s*(?:XP|xp)?\b/);
-          if (xpMatch) {
-            currentXp = xpMatch[1];
+            // Split by comma, clean up each name
+            const usernames = usersPart.split(',').map(u => u.trim()).filter(u => u.length > 0);
+            for (const username of usernames) {
+              // Strip trailing emoji/arrows like "— 10 🔼" at end of last item
+              const clean = username.replace(/[—–]\s*\d+.*$/, '').trim();
+              if (!clean) continue;
+              giveCmds.push(`/give-xp member:@${clean} amount:${xp}`);
+            }
           }
+        } else {
+          // Format: @username lines with XP numbers
+          let currentXp = '0';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || /^https?:\/\/\S+$/.test(trimmed)) continue;
 
-          // Check for "Honorable Contributions - XXXX XP" style header
-          if (!trimmed.includes('@')) continue;
+            const lineWithoutUrls = trimmed.replace(/https?:\/\/\S+/g, '');
+            const xpMatch = lineWithoutUrls.match(/\b(\d{3,5})\s*(?:XP|xp)?\b/);
+            if (xpMatch) currentXp = xpMatch[1];
 
-          // Extract all @usernames — support unicode nicknames by matching everything after @
-          // until whitespace, &, https, or end of meaningful text
-          const usernameMatches = [...trimmed.matchAll(/@([^\s@&\n]+)/g)];
+            if (!trimmed.includes('@')) continue;
 
-          for (const match of usernameMatches) {
-            const username = match[1].trim().replace(/[,;]+$/, '');
-            // Skip if it looks like a URL fragment
-            if (username.includes('/') || username.includes('http')) continue;
-            giveCmds.push(`/give-xp member:@${username} amount:${currentXp}`);
+            const usernameMatches = [...trimmed.matchAll(/@([^\s@&\n]+)/g)];
+            for (const match of usernameMatches) {
+              const username = match[1].trim().replace(/[,;]+$/, '');
+              if (username.includes('/') || username.includes('http')) continue;
+              giveCmds.push(`/give-xp member:@${username} amount:${currentXp}`);
+            }
           }
         }
 
         if (giveCmds.length === 0) {
-          await interaction.editReply({ content: '❌ No @username patterns found in the text.' });
+          await interaction.editReply({ content: '❌ No usernames found in the text.' });
           return;
         }
 
-        const output = `**Parsed ${giveCmds.length} user(s):**\n\`\`\`\n${giveCmds.join('\n')}\n\`\`\``;
-        await interaction.editReply({ content: output });
+        // Split into chunks to stay under Discord 2000 char limit
+        const header = `**Parsed ${giveCmds.length} user(s):**\n`;
+        const chunks: string[] = [];
+        let current = '';
+        for (const cmd of giveCmds) {
+          if ((`\`\`\`\n` + current + cmd + '\n```').length > 1800) {
+            chunks.push(current);
+            current = '';
+          }
+          current += cmd + '\n';
+        }
+        if (current) chunks.push(current);
+
+        await interaction.editReply({ content: `${header}\`\`\`\n${chunks[0]}\`\`\`` });
+        for (let i = 1; i < chunks.length; i++) {
+          await interaction.followUp({ content: `\`\`\`\n${chunks[i]}\`\`\``, ephemeral: true });
+        }
       } catch (error) {
         console.error('Error in parse-message:', error);
         await interaction.editReply({ content: '❌ Failed to parse text.' });

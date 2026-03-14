@@ -2650,6 +2650,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'draw') {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ You do not have permission to use this command. (Admin role required)', ephemeral: true });
+          return;
+        }
+
         await interaction.deferReply();
 
         try {

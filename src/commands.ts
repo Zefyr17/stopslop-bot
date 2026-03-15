@@ -102,6 +102,22 @@ export const commands = [
         .setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName('set-unlimited-roles')
+    .setDescription('Set roles that bypass weekly post limits (e.g. Singularity)')
+    .addRoleOption(option =>
+      option.setName('role1')
+        .setDescription('First role')
+        .setRequired(true))
+    .addRoleOption(option =>
+      option.setName('role2')
+        .setDescription('Second role')
+        .setRequired(false))
+    .addRoleOption(option =>
+      option.setName('role3')
+        .setDescription('Third role')
+        .setRequired(false)),
+
+  new SlashCommandBuilder()
     .setName('set-thresholds')
     .setDescription('Set voting thresholds')
     .addIntegerOption(option =>

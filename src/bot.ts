@@ -317,6 +317,11 @@ bot.on(Events.MessageCreate, async (message) => {
       return;
     }
 
+    // Check if user has an unlimited role (bypass post limit)
+    const memberForLimit = await message.guild.members.fetch(message.author.id);
+    const hasUnlimitedRole = config.unlimitedRoleIds && config.unlimitedRoleIds.length > 0 &&
+      config.unlimitedRoleIds.some((roleId: string) => memberForLimit.roles.cache.has(roleId));
+
     // Check spam penalty post limit (per channel)
     const postLimitCheck = await spamPenaltyService.canUserPost(
       message.author.id,
@@ -325,7 +330,7 @@ bot.on(Events.MessageCreate, async (message) => {
       config.defaultPostLimit
     );
 
-    if (!postLimitCheck.canPost) {
+    if (!postLimitCheck.canPost && !hasUnlimitedRole) {
       console.log(`[SpamPenalty] User ${message.author.id} blocked from posting in ${message.channelId}. Limit: ${postLimitCheck.limit}, Current: ${postLimitCheck.currentCount}`);
 
       // Reply in channel before deleting so the user sees it
@@ -1020,6 +1025,24 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       await interaction.reply({
         content: `✅ Judge roles updated: ${roleIds.map(id => `<@&${id}>`).join(', ')}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (commandName === 'set-unlimited-roles') {
+      const role1 = interaction.options.getRole('role1', true);
+      const role2 = interaction.options.getRole('role2', false);
+      const role3 = interaction.options.getRole('role3', false);
+
+      const roles = [role1, role2, role3].filter(r => r !== null);
+      const roleIds = roles.map(r => r!.id);
+
+      await guildConfigService.getOrCreateConfig(guildId);
+      await guildConfigService.updateConfig(guildId, { unlimitedRoleIds: roleIds });
+
+      await interaction.reply({
+        content: `✅ Unlimited post roles updated: ${roleIds.map(id => `<@&${id}>`).join(', ')}\nUsers with these roles will bypass weekly post limits.`,
         ephemeral: true,
       });
       return;

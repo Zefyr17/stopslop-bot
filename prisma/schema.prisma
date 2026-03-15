@@ -102,6 +102,7 @@ model GuildConfig {
   voterRoleIds         String[]      @default([])
   judgeRoleIds         String[]      @default([])
   adminRoleIds         String[]      @default([])
+  unlimitedRoleIds     String[]      @default([])
   upvoteThreshold      Int           @default(5)
   downvoteThreshold    Int           @default(5)
   defaultPostLimit     Int           @default(3)

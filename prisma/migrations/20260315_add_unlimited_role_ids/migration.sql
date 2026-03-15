@@ -1,0 +1,1 @@
+ALTER TABLE "GuildConfig" ADD COLUMN IF NOT EXISTS "unlimitedRoleIds" TEXT[] NOT NULL DEFAULT '{}';

@@ -35,6 +35,7 @@ export class GuildConfigService {
       voterRoleIds: string[];
       judgeRoleIds: string[];
       adminRoleIds: string[];
+      unlimitedRoleIds: string[];
       upvoteThreshold: number;
       downvoteThreshold: number;
       raffleRoleId: string | null;

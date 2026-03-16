@@ -1935,14 +1935,87 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         await interaction.deferReply({ ephemeral: true });
 
-        // Get optional monitored channel filter
+        // Get optional filters
         const monitoredChannel = interaction.options.getChannel('monitored', false);
+        const weekIdParam = interaction.options.getString('week_id', false);
+        const period = interaction.options.getString('period', false);
 
-        // Get active week
-        const activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
-        if (!activeWeek) {
-          await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
+        // --- PERIOD MODE: summary across multiple weeks ---
+        if (period) {
+          const now = new Date();
+          const cutoff = new Date(now);
+          if (period === 'last_month') cutoff.setMonth(cutoff.getMonth() - 1);
+          else if (period === 'last_2_months') cutoff.setMonth(cutoff.getMonth() - 2);
+
+          const weeks = await prisma.week.findMany({
+            where: {
+              startDate: { gte: cutoff },
+              ...(monitoredChannel ? { monitoredChannelId: monitoredChannel.id } : {}),
+            },
+            orderBy: { startDate: 'asc' },
+          });
+
+          if (weeks.length === 0) {
+            await interaction.editReply({ content: `No weeks found for the selected period.` });
+            return;
+          }
+
+          const periodLabel = period === 'last_month' ? 'Last Month' : 'Last 2 Months';
+          const channelInfo = monitoredChannel ? ` (<#${monitoredChannel.id}>)` : '';
+          const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle(`Statistics — ${periodLabel}${channelInfo}`)
+            .setTimestamp();
+
+          const lines: string[] = [];
+          let totalPosts = 0, totalShortlisted = 0, totalRejected = 0;
+
+          for (const week of weeks) {
+            const posts = await postService.getPostsByWeek(week.id);
+            const filtered = monitoredChannel ? posts.filter(p => p.monitoredChannelId === monitoredChannel.id) : posts;
+            const shortlisted = filtered.filter(p => p.status === PostStatus.SHORTLISTED).length;
+            const rejected = filtered.filter(p => p.status === PostStatus.REJECTED).length;
+            const pending = filtered.filter(p => p.status === PostStatus.PENDING).length;
+            const penalties = await prisma.spamPenalty.count({ where: { weekId: week.id } });
+            const startStr = week.startDate.toISOString().split('T')[0];
+            const endStr = week.endDate.toISOString().split('T')[0];
+            const statusIcon = week.status === 'CLOSED' ? '🔒' : '🟢';
+
+            lines.push(
+              `${statusIcon} **${startStr} → ${endStr}**\n` +
+              `Total: **${filtered.length}** | ✅ ${shortlisted} | ❌ ${rejected} | ⏳ ${pending} | ⚠️ ${penalties} penalties`
+            );
+
+            totalPosts += filtered.length;
+            totalShortlisted += shortlisted;
+            totalRejected += rejected;
+          }
+
+          embed.setDescription(lines.join('\n\n'));
+          embed.addFields({
+            name: `Totals across ${weeks.length} week(s)`,
+            value: `Posts: **${totalPosts}** | Shortlisted: **${totalShortlisted}** | Rejected: **${totalRejected}**`,
+            inline: false,
+          });
+
+          await interaction.editReply({ embeds: [embed] });
           return;
+        }
+
+        // --- SINGLE WEEK MODE ---
+        let activeWeek;
+        if (weekIdParam) {
+          activeWeek = await prisma.week.findUnique({ where: { id: weekIdParam } });
+          if (!activeWeek) {
+            await interaction.editReply({ content: `❌ No week found with ID \`${weekIdParam}\`.` });
+            return;
+          }
+        } else {
+          activeWeek = await weekService.getActiveWeek(monitoredChannel?.id);
+          if (!activeWeek) {
+            await interaction.editReply({ content: 'No active voting period. Use `/week start` to begin accepting posts.' });
+            return;
+          }
         }
 
         // Get all posts for this week
@@ -2159,7 +2232,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         // Add week info
         const startDate = activeWeek.startDate.toISOString().split('T')[0];
-        embed.setFooter({ text: `Week started: ${startDate}` });
+        const endDate = activeWeek.endDate.toISOString().split('T')[0];
+        const weekStatus = activeWeek.status === 'CLOSED' ? `Closed week: ${startDate} → ${endDate}` : `Week started: ${startDate}`;
+        embed.setFooter({ text: weekStatus });
         embed.setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });

@@ -234,7 +234,7 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName('stats')
-    .setDescription('Show voting statistics for current week')
+    .setDescription('Show voting statistics for current or past week')
     .addChannelOption(option =>
       option.setName('monitored')
         .setDescription('Filter by monitored channel (optional)')
@@ -242,7 +242,19 @@ export const commands = [
     .addRoleOption(option =>
       option.setName('role')
         .setDescription('Role to check voting stats for (default: voter roles from config)')
-        .setRequired(false)),
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('week_id')
+        .setDescription('Week ID to view past stats (visible in mod log)')
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('period')
+        .setDescription('View summary across all weeks in a period')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Last month', value: 'last_month' },
+          { name: 'Last 2 months', value: 'last_2_months' },
+        )),
 
   new SlashCommandBuilder()
     .setName('leaderboard')

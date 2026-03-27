@@ -39,7 +39,17 @@ export const commands = [
         .addRoleOption(option =>
           option.setName('role3')
             .setDescription('Third admin role')
-            .setRequired(false))),
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set-post-limit')
+        .setDescription('Set the default weekly post limit per user (Admin only)')
+        .addIntegerOption(option =>
+          option.setName('limit')
+            .setDescription('Number of posts allowed per user per week')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(10))),
 
   new SlashCommandBuilder()
     .setName('channel-pair')

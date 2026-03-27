@@ -924,6 +924,16 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         });
         return;
       }
+
+      if (subcommand === 'set-post-limit') {
+        const limit = interaction.options.getInteger('limit', true);
+        await guildConfigService.updateConfig(guildId, { defaultPostLimit: limit });
+        await interaction.reply({
+          content: `✅ Default weekly post limit set to **${limit}** posts per user.`,
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
     if (commandName === 'channel-pair') {

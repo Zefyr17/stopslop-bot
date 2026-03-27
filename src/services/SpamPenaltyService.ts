@@ -1,7 +1,7 @@
 import { prisma } from '../db';
 import { PostStatus, WeekStatus } from '@prisma/client';
 
-const DEFAULT_POST_LIMIT = 3;
+const DEFAULT_POST_LIMIT = 4;
 
 export class SpamPenaltyService {
   /**

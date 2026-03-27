@@ -39,6 +39,7 @@ export class GuildConfigService {
       upvoteThreshold: number;
       downvoteThreshold: number;
       raffleRoleId: string | null;
+      defaultPostLimit: number;
     }>
   ): Promise<GuildConfig> {
     return prisma.guildConfig.update({

@@ -2421,11 +2421,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'grant-slot') {
         const targetUser = interaction.options.getUser('user', true);
+        const grantChannel = interaction.options.getChannel('channel', false);
         try {
-          const removed = await spamPenaltyService.removeOnePenalty(targetUser.id, guildId);
+          const removed = await spamPenaltyService.removeOnePenalty(targetUser.id, guildId, grantChannel?.id);
           if (!removed) {
             await interaction.reply({
-              content: `ℹ️ <@${targetUser.id}> has no penalties — they already have the full post limit.`,
+              content: `ℹ️ <@${targetUser.id}> has no penalties${grantChannel ? ` for <#${grantChannel.id}>` : ''} — they already have the full post limit.`,
               ephemeral: true,
             });
             return;
@@ -2434,11 +2435,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
             oderId: targetUser.id,
             adminId: interaction.user.id,
-            details: `+1 post slot granted to ${targetUser.username} (<@${targetUser.id}>) by ${interaction.user.username} (<@${interaction.user.id}>)`,
+            details: `+1 post slot granted to ${targetUser.username} (<@${targetUser.id}>) by ${interaction.user.username} (<@${interaction.user.id}>)${grantChannel ? ` for channel <#${grantChannel.id}>` : ''}`,
           });
 
           await interaction.reply({
-            content: `✅ Granted +1 post slot to <@${targetUser.id}> (one penalty removed).`,
+            content: `✅ Granted +1 post slot to <@${targetUser.id}>${grantChannel ? ` in <#${grantChannel.id}>` : ''} (one penalty removed).`,
             ephemeral: true,
           });
         } catch (error) {

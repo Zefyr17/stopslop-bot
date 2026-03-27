@@ -300,7 +300,11 @@ export const commands = [
         .addUserOption(option =>
           option.setName('user')
             .setDescription('User to grant a slot to')
-            .setRequired(true)))
+            .setRequired(true))
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel to grant slot for (optional, removes penalty from that channel\'s weeks)')
+            .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('remove')

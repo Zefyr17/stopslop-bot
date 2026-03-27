@@ -182,6 +182,21 @@ export class SpamPenaltyService {
   }
 
   /**
+   * Remove one penalty from a user, giving them +1 post slot.
+   * Returns true if a penalty was found and removed, false if user has no penalties.
+   */
+  async removeOnePenalty(discordUserId: string, guildId: string): Promise<boolean> {
+    const penalty = await prisma.spamPenalty.findFirst({
+      where: { oderId: discordUserId, guildId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!penalty) return false;
+    await prisma.spamPenalty.delete({ where: { id: penalty.id } });
+    console.log(`[SpamPenalty] Removed one penalty for user ${discordUserId} in guild ${guildId}`);
+    return true;
+  }
+
+  /**
    * Remove penalty for a specific post.
    * Returns true if a penalty was found and removed, false otherwise.
    */

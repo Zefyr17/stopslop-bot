@@ -295,6 +295,14 @@ export const commands = [
             .setRequired(true)))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('grant-slot')
+        .setDescription('Give a user +1 post slot this week by removing one penalty (Admin only)')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to grant a slot to')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('remove')
         .setDescription('Remove spam penalty for a specific post (Admin only)')
         .addStringOption(option =>

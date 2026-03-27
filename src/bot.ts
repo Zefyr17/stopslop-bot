@@ -2419,6 +2419,35 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
+      if (subcommand === 'grant-slot') {
+        const targetUser = interaction.options.getUser('user', true);
+        try {
+          const removed = await spamPenaltyService.removeOnePenalty(targetUser.id, guildId);
+          if (!removed) {
+            await interaction.reply({
+              content: `ℹ️ <@${targetUser.id}> has no penalties — they already have the full post limit.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+            oderId: targetUser.id,
+            adminId: interaction.user.id,
+            details: `+1 post slot granted to ${targetUser.username} (<@${targetUser.id}>) by ${interaction.user.username} (<@${interaction.user.id}>)`,
+          });
+
+          await interaction.reply({
+            content: `✅ Granted +1 post slot to <@${targetUser.id}> (one penalty removed).`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam grant-slot:', error);
+          await interaction.reply({ content: '❌ Failed to grant slot.', ephemeral: true });
+        }
+        return;
+      }
+
       if (subcommand === 'remove') {
         const postId = interaction.options.getString('post_id', true);
         try {

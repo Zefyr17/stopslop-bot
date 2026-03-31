@@ -682,7 +682,7 @@ async function handleShortlistRejectButton(interaction: ButtonInteraction, guild
     }
 
     const postId = interaction.customId.replace('shortlist_reject_', '');
-    const post = await postService.getPost(postId);
+    const post = await postService.getPostById(postId);
 
     if (!post) {
       await interaction.reply({ content: '❌ Post not found.', ephemeral: true });

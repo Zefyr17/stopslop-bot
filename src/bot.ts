@@ -449,6 +449,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    if (customId.startsWith('shortlist_reject_')) {
+      await handleShortlistRejectButton(interaction, guildId);
+      return;
+    }
+
     if (!customId.startsWith('upvote_') && !customId.startsWith('downvote_')) {
       return;
     }
@@ -610,9 +615,13 @@ bot.on(Events.InteractionCreate, async (interaction) => {
             new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
           );
 
+          const rejectRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`shortlist_reject_${post.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
+          );
+
             await shortlistChannel.send({
               content: `⭐ **Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
-              components: [rateRow1, rateRow2]
+              components: [rateRow1, rateRow2, rejectRow]
             });
             console.log(`Posted to shortlist channel: ${post.id}`);
           }
@@ -659,6 +668,74 @@ bot.on(Events.InteractionCreate, async (interaction) => {
   }
 
 });
+
+async function handleShortlistRejectButton(interaction: ButtonInteraction, guildId: string) {
+  try {
+    const config = await guildConfigService.getConfig(guildId);
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    const userRoleIds = Array.from(member.roles.cache.keys());
+    const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+    if (!isAdmin) {
+      await interaction.reply({ content: '❌ Only admins can reject shortlisted posts.', ephemeral: true });
+      return;
+    }
+
+    const postId = interaction.customId.replace('shortlist_reject_', '');
+    const post = await postService.getPost(postId);
+
+    if (!post) {
+      await interaction.reply({ content: '❌ Post not found.', ephemeral: true });
+      return;
+    }
+
+    if (post.status === PostStatus.REJECTED) {
+      await interaction.reply({ content: '⚠️ This post is already rejected.', ephemeral: true });
+      return;
+    }
+
+    await postService.updateStatus(postId, PostStatus.REJECTED);
+
+    // Disable buttons on review message in monitored channel
+    if (post.reviewMessageId && post.monitoredChannelId) {
+      try {
+        const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
+        if (channel?.isTextBased()) {
+          const reviewMessage = await channel.messages.fetch(post.reviewMessageId);
+          const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`upvote_${postId}`).setLabel('Yes').setStyle(ButtonStyle.Primary).setDisabled(true),
+            new ButtonBuilder().setCustomId(`downvote_${postId}`).setLabel('No').setStyle(ButtonStyle.Secondary).setDisabled(true)
+          );
+          await reviewMessage.edit({ components: [disabledRow] });
+        }
+      } catch (err) {
+        console.error('Failed to update review message:', err);
+      }
+    }
+
+    // Delete the shortlist message
+    try {
+      await interaction.message.delete();
+    } catch (err) {
+      console.error('Failed to delete shortlist message:', err);
+    }
+
+    await modLogService.log(guildId, ModLogEventType.ADMIN_OVERRIDE_REJECT, {
+      postId: postId,
+      postLink: post.link,
+      authorId: post.authorId,
+      adminId: interaction.user.id,
+      oldStatus: post.status,
+    });
+
+    await interaction.reply({ content: `✅ Post rejected and removed from shortlist.`, ephemeral: true });
+  } catch (error) {
+    console.error('Error in shortlist reject button:', error);
+    try {
+      await interaction.reply({ content: '❌ Failed to reject post.', ephemeral: true });
+    } catch {}
+  }
+}
 
 async function handleRateButton(interaction: ButtonInteraction, guildId: string) {
   try {
@@ -1379,9 +1456,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 new ButtonBuilder().setCustomId(`rate_${postId}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
               );
 
+              const rejectRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`shortlist_reject_${postId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
+              );
+
               await shortlistChannel.send({
                 content: `⭐ **Shortlisted Content (Admin Override)** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
-                components: [rateRow1, rateRow2]
+                components: [rateRow1, rateRow2, rejectRow]
               });
             }
           } catch (error) {

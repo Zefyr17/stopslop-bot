@@ -84,6 +84,8 @@ export class SpamPenaltyService {
       },
     });
 
+    console.log(`[PostLimit] user=${discordUserId} channel=${monitoredChannelId} closedWeeks=${closedWeekIds.length} penalties=${totalPenalties} shortlisted=${totalShortlisted} default=${defaultLimit} result=${Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted))}`);
+
     return Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted));
   }
 

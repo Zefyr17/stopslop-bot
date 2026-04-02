@@ -49,7 +49,11 @@ export const commands = [
             .setDescription('Number of posts allowed per user per week')
             .setRequired(true)
             .setMinValue(1)
-            .setMaxValue(10))),
+            .setMaxValue(10)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reset')
+        .setDescription('Reset server configuration to defaults (Admin only)')),
 
   new SlashCommandBuilder()
     .setName('channel-pair')

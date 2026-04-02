@@ -130,6 +130,13 @@ bot.on(Events.MessageCreate, async (message) => {
             inline: false
           },
           {
+            name: '🔓 Unlimited Roles',
+            value: config.unlimitedRoleIds && config.unlimitedRoleIds.length > 0
+              ? config.unlimitedRoleIds.map((id: string) => `<@&${id}>`).join(', ')
+              : '*Not set*',
+            inline: false
+          },
+          {
             name: '📊 Voting Thresholds',
             value: `👍 Yes: **${config.upvoteThreshold}**\n👎 No: **${config.downvoteThreshold}**`,
             inline: false
@@ -950,6 +957,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               inline: false
             },
             {
+              name: '🔓 Unlimited Roles',
+              value: config.unlimitedRoleIds && config.unlimitedRoleIds.length > 0
+                ? config.unlimitedRoleIds.map((id: string) => `<@&${id}>`).join(', ')
+                : '*Not set*',
+              inline: false
+            },
+            {
               name: '📊 Voting Thresholds',
               value: `👍 Yes: **${config.upvoteThreshold}**\n👎 No: **${config.downvoteThreshold}**`,
               inline: false
@@ -963,6 +977,35 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      if (subcommand === 'reset') {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ You do not have permission to reset the configuration.', ephemeral: true });
+          return;
+        }
+
+        await guildConfigService.updateConfig(guildId, {
+          modLogChannelId: null,
+          voterRoleIds: [],
+          judgeRoleIds: [],
+          adminRoleIds: [],
+          unlimitedRoleIds: [],
+          upvoteThreshold: 5,
+          downvoteThreshold: 5,
+          defaultPostLimit: 3,
+          raffleRoleId: null,
+        });
+
+        await interaction.reply({
+          content: '✅ **Server configuration reset to defaults.**\n\n**Defaults applied:**\n• Voter/Judge/Admin/Unlimited roles — cleared\n• Voting thresholds — 5 Yes / 5 No\n• Post limit — 3 per user\n• Mod log channel — cleared\n• Raffle role — cleared\n\n⚠️ Channel pairs are **not** affected. Use `/channel-pair remove` to remove them manually.',
+          ephemeral: true,
+        });
         return;
       }
 

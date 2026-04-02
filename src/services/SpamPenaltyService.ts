@@ -52,7 +52,16 @@ export class SpamPenaltyService {
    * This means a user must earn back their post slots by getting posts shortlisted.
    */
   async getPostLimit(discordUserId: string, guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<number> {
-    // Count all penalties across all closed weeks for this channel
+    const details = await this.getPostLimitDetails(discordUserId, guildId, monitoredChannelId, defaultLimit);
+    return details.limit;
+  }
+
+  async getPostLimitDetails(discordUserId: string, guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<{
+    limit: number;
+    totalPenalties: number;
+    totalShortlisted: number;
+    closedWeeksCount: number;
+  }> {
     const closedWeeks = await prisma.week.findMany({
       where: {
         status: WeekStatus.CLOSED,
@@ -62,7 +71,7 @@ export class SpamPenaltyService {
     });
 
     if (closedWeeks.length === 0) {
-      return defaultLimit;
+      return { limit: defaultLimit, totalPenalties: 0, totalShortlisted: 0, closedWeeksCount: 0 };
     }
 
     const closedWeekIds = closedWeeks.map(w => w.id);
@@ -84,9 +93,8 @@ export class SpamPenaltyService {
       },
     });
 
-    console.log(`[PostLimit] user=${discordUserId} channel=${monitoredChannelId} closedWeeks=${closedWeekIds.length} penalties=${totalPenalties} shortlisted=${totalShortlisted} default=${defaultLimit} result=${Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted))}`);
-
-    return Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted));
+    const limit = Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted));
+    return { limit, totalPenalties, totalShortlisted, closedWeeksCount: closedWeeks.length };
   }
 
   /**
@@ -122,15 +130,18 @@ export class SpamPenaltyService {
     guildId: string,
     monitoredChannelId: string,
     defaultLimit: number = DEFAULT_POST_LIMIT
-  ): Promise<{ canPost: boolean; currentCount: number; limit: number; penaltyBalance: number }> {
-    const limit = await this.getPostLimit(discordUserId, guildId, monitoredChannelId, defaultLimit);
+  ): Promise<{ canPost: boolean; currentCount: number; limit: number; penaltyBalance: number; totalPenalties: number; totalShortlisted: number; closedWeeksCount: number }> {
+    const details = await this.getPostLimitDetails(discordUserId, guildId, monitoredChannelId, defaultLimit);
     const currentCount = await this.getUserPostCount(discordUserId, monitoredChannelId);
 
     return {
-      canPost: currentCount < limit,
+      canPost: currentCount < details.limit,
       currentCount,
-      limit,
-      penaltyBalance: defaultLimit - limit,
+      limit: details.limit,
+      penaltyBalance: defaultLimit - details.limit,
+      totalPenalties: details.totalPenalties,
+      totalShortlisted: details.totalShortlisted,
+      closedWeeksCount: details.closedWeeksCount,
     };
   }
 

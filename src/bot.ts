@@ -2492,16 +2492,33 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               orderBy: { createdAt: 'asc' },
             }) : [];
 
+            // Build limit formula string
+            const { totalPenalties, totalShortlisted, closedWeeksCount } = postLimitCheck;
+            const defaultLimit = config.defaultPostLimit;
             let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
-            if (postLimitCheck.penaltyBalance > 0) {
-              channelStatus += `\nPenalty balance: **-${postLimitCheck.penaltyBalance}** (limit reduced)`;
+
+            // Always show limit breakdown so it's clear how the limit was calculated
+            if (closedWeeksCount > 0) {
+              const netEffect = totalShortlisted - totalPenalties;
+              const netStr = netEffect >= 0 ? `+${netEffect}` : `${netEffect}`;
+              channelStatus += `\nLimit: **${defaultLimit}** base ${netEffect >= 0 ? '🟢' : '🔴'} **${netStr}** net (${totalPenalties} ❌ penalties, ${totalShortlisted} ✅ shortlisted across ${closedWeeksCount} past weeks)`;
             }
+
+            // Current active week stats
             if (currentWeekStats.penalties > 0) {
-              channelStatus += `\nPenalties this week: **${currentWeekStats.penalties}**`;
+              channelStatus += `\nThis week: **${currentWeekStats.penalties}** ❌ new penalties (will apply next week)`;
             }
             if (currentWeekStats.shortlisted > 0) {
-              channelStatus += `\nShortlisted this week: **${currentWeekStats.shortlisted}** (+${currentWeekStats.shortlisted} recovery)`;
+              channelStatus += `\nThis week: **${currentWeekStats.shortlisted}** ✅ shortlisted (will recover next week)`;
             }
+
+            const remainingPosts = postLimitCheck.limit - postLimitCheck.currentCount;
+            if (remainingPosts > 0) {
+              channelStatus += `\n🟢 Can post: **${remainingPosts}** slot${remainingPosts > 1 ? 's' : ''} remaining`;
+            } else {
+              channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**)`;
+            }
+
             if (weekPosts.length > 0) {
               channelStatus += '\n' + weekPosts.map((p, i) => `Post ${i + 1}: ${p.link}\n┗ ID: \`${p.id}\``).join('\n');
             }

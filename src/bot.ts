@@ -2519,15 +2519,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**)`;
             }
 
-            // Next week forecast
-            const nextWeekPenalties = totalPenalties + currentWeekStats.penalties;
-            const nextWeekShortlisted = totalShortlisted + currentWeekStats.shortlisted;
-            const nextWeekLimit = Math.min(defaultLimit, Math.max(1, defaultLimit - nextWeekPenalties + nextWeekShortlisted));
+            // Next week forecast — based on current limit + this week's active changes
+            const nextWeekLimit = Math.min(defaultLimit, Math.max(1, postLimitCheck.limit - currentWeekStats.penalties + currentWeekStats.shortlisted));
             const limitDelta = nextWeekLimit - postLimitCheck.limit;
 
             let forecast = '';
-            if (nextWeekPenalties === 0 && nextWeekShortlisted === 0) {
-              forecast = `Next week: **${nextWeekLimit}** posts (no penalties or shortlisted history — default limit applies)`;
+            if (currentWeekStats.penalties === 0 && currentWeekStats.shortlisted === 0) {
+              forecast = `Next week: **${nextWeekLimit}** posts (no changes this week — limit carries over)`;
             } else if (limitDelta > 0) {
               forecast = `Next week: limit increases to **${nextWeekLimit}** (+${limitDelta}) — ${currentWeekStats.shortlisted > 0 ? `${currentWeekStats.shortlisted} shortlisted this week will recover slots` : 'past shortlisted outweigh penalties'}`;
             } else if (limitDelta < 0) {

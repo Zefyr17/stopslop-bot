@@ -2519,6 +2519,30 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**)`;
             }
 
+            // Next week forecast
+            const nextWeekPenalties = totalPenalties + currentWeekStats.penalties;
+            const nextWeekShortlisted = totalShortlisted + currentWeekStats.shortlisted;
+            const nextWeekLimit = Math.min(defaultLimit, Math.max(1, defaultLimit - nextWeekPenalties + nextWeekShortlisted));
+            const limitDelta = nextWeekLimit - postLimitCheck.limit;
+
+            let forecast = '';
+            if (nextWeekPenalties === 0 && nextWeekShortlisted === 0) {
+              forecast = `Next week: **${nextWeekLimit}** posts (no penalties or shortlisted history — default limit applies)`;
+            } else if (limitDelta > 0) {
+              forecast = `Next week: limit increases to **${nextWeekLimit}** (+${limitDelta}) — ${currentWeekStats.shortlisted > 0 ? `${currentWeekStats.shortlisted} shortlisted this week will recover slots` : 'past shortlisted outweigh penalties'}`;
+            } else if (limitDelta < 0) {
+              forecast = `Next week: limit decreases to **${nextWeekLimit}** (${limitDelta}) — ${currentWeekStats.penalties > 0 ? `${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} this week will apply` : 'accumulated penalties exceed shortlisted posts'}`;
+            } else {
+              if (currentWeekStats.penalties > 0 && currentWeekStats.shortlisted > 0) {
+                forecast = `Next week: limit stays at **${nextWeekLimit}** — ${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} and ${currentWeekStats.shortlisted} shortlisted this week cancel each other out`;
+              } else if (currentWeekStats.penalties > 0) {
+                forecast = `Next week: limit stays at **${nextWeekLimit}** — ${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} this week, but already at minimum (1)`;
+              } else {
+                forecast = `Next week: limit stays at **${nextWeekLimit}** — already at maximum or no change`;
+              }
+            }
+            channelStatus += `\n📊 ${forecast}`;
+
             if (weekPosts.length > 0) {
               channelStatus += '\n' + weekPosts.map((p, i) => `Post ${i + 1}: ${p.link}\n┗ ID: \`${p.id}\``).join('\n');
             }

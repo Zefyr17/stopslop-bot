@@ -1441,6 +1441,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
         await postService.updateStatus(postId, PostStatus.SHORTLISTED);
 
+        // If post had a spam penalty (was rejected with 0 upvotes), remove it automatically
+        const penaltyRemoved = await spamPenaltyService.removePenaltyByPost(postId);
+        if (penaltyRemoved) {
+          console.log(`[Approve] Removed spam penalty for post ${postId} due to admin override`);
+        }
+
         // Update review message buttons if it exists
         if (post.reviewMessageId && post.monitoredChannelId) {
           try {

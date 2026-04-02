@@ -2497,11 +2497,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             const defaultLimit = config.defaultPostLimit;
             let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
 
-            // Always show limit breakdown so it's clear how the limit was calculated
+            // Show limit breakdown based on last closed week only
             if (closedWeeksCount > 0) {
               const netEffect = totalShortlisted - totalPenalties;
               const netStr = netEffect >= 0 ? `+${netEffect}` : `${netEffect}`;
-              channelStatus += `\nLimit: **${defaultLimit}** base ${netEffect >= 0 ? '🟢' : '🔴'} **${netStr}** net (${totalPenalties} ❌ penalties, ${totalShortlisted} ✅ shortlisted across ${closedWeeksCount} past weeks)`;
+              channelStatus += `\nLimit: **${defaultLimit}** base ${netEffect >= 0 ? '🟢' : '🔴'} **${netStr}** last week (${totalPenalties} ❌ penalties, ${totalShortlisted} ✅ shortlisted)`;
             }
 
             // Current active week stats

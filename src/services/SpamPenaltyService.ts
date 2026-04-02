@@ -42,14 +42,13 @@ export class SpamPenaltyService {
   }
 
   /**
-   * Get the cumulative post limit for a user.
+   * Get the post limit for a user based on their history.
    *
-   * The limit is calculated across ALL closed weeks:
-   * - Each penalty (spam post) gives -1
-   * - Each shortlisted post gives +1 (recovery)
-   * - Result: defaultLimit - totalPenalties + totalShortlisted, clamped to [1, defaultLimit]
+   * The limit evolves week by week:
+   *   limit_this_week = clamp(limit_last_week - penalties_last_week + shortlisted_last_week, 1, default)
    *
-   * This means a user must earn back their post slots by getting posts shortlisted.
+   * If last week had no penalties and no shortlisted posts, the limit carries over unchanged.
+   * Penalties reduce the limit, shortlisted posts recover it, clamped between 1 and defaultLimit.
    */
   async getPostLimit(discordUserId: string, guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<number> {
     const details = await this.getPostLimitDetails(discordUserId, guildId, monitoredChannelId, defaultLimit);
@@ -58,43 +57,47 @@ export class SpamPenaltyService {
 
   async getPostLimitDetails(discordUserId: string, guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<{
     limit: number;
-    totalPenalties: number;
-    totalShortlisted: number;
+    lastWeekPenalties: number;
+    lastWeekShortlisted: number;
     closedWeeksCount: number;
   }> {
+    // Get all closed weeks in chronological order
     const closedWeeks = await prisma.week.findMany({
-      where: {
-        status: WeekStatus.CLOSED,
-        monitoredChannelId,
-      },
+      where: { status: WeekStatus.CLOSED, monitoredChannelId },
+      orderBy: { endDate: 'asc' },
       select: { id: true },
     });
 
     if (closedWeeks.length === 0) {
-      return { limit: defaultLimit, totalPenalties: 0, totalShortlisted: 0, closedWeeksCount: 0 };
+      return { limit: defaultLimit, lastWeekPenalties: 0, lastWeekShortlisted: 0, closedWeeksCount: 0 };
     }
 
-    const closedWeekIds = closedWeeks.map(w => w.id);
+    // Walk through all closed weeks in order, applying each week's delta to the previous limit
+    // This way: limit_week_N = clamp(limit_week_(N-1) + shortlisted_N - penalties_N, 1, default)
+    let currentLimit = defaultLimit;
+    let lastWeekPenalties = 0;
+    let lastWeekShortlisted = 0;
 
-    const totalPenalties = await prisma.spamPenalty.count({
-      where: {
-        oderId: discordUserId,
-        guildId,
-        weekId: { in: closedWeekIds },
-      },
-    });
+    for (const week of closedWeeks) {
+      const penalties = await prisma.spamPenalty.count({
+        where: { oderId: discordUserId, guildId, weekId: week.id },
+      });
 
-    const totalShortlisted = await prisma.post.count({
-      where: {
-        authorId: discordUserId,
-        monitoredChannelId,
-        weekId: { in: closedWeekIds },
-        status: PostStatus.SHORTLISTED,
-      },
-    });
+      const shortlisted = await prisma.post.count({
+        where: {
+          authorId: discordUserId,
+          monitoredChannelId,
+          weekId: week.id,
+          status: PostStatus.SHORTLISTED,
+        },
+      });
 
-    const limit = Math.min(defaultLimit, Math.max(1, defaultLimit - totalPenalties + totalShortlisted));
-    return { limit, totalPenalties, totalShortlisted, closedWeeksCount: closedWeeks.length };
+      currentLimit = Math.min(defaultLimit, Math.max(1, currentLimit - penalties + shortlisted));
+      lastWeekPenalties = penalties;
+      lastWeekShortlisted = shortlisted;
+    }
+
+    return { limit: currentLimit, lastWeekPenalties, lastWeekShortlisted, closedWeeksCount: closedWeeks.length };
   }
 
   /**
@@ -139,8 +142,8 @@ export class SpamPenaltyService {
       currentCount,
       limit: details.limit,
       penaltyBalance: defaultLimit - details.limit,
-      totalPenalties: details.totalPenalties,
-      totalShortlisted: details.totalShortlisted,
+      totalPenalties: details.lastWeekPenalties,
+      totalShortlisted: details.lastWeekShortlisted,
       closedWeeksCount: details.closedWeeksCount,
     };
   }

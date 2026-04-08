@@ -626,8 +626,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
             new ButtonBuilder().setCustomId(`shortlist_reject_${post.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
           );
 
+            const shortlistNumber = await prisma.post.count({
+              where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
+            });
             await shortlistChannel.send({
-              content: `⭐ **Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
+              content: `⭐ **${shortlistNumber}. Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
               components: [rateRow1, rateRow2, rejectRow]
             });
             console.log(`Posted to shortlist channel: ${post.id}`);
@@ -1509,8 +1512,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 new ButtonBuilder().setCustomId(`shortlist_reject_${postId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
               );
 
+              const shortlistNumber = await prisma.post.count({
+                where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
+              });
               await shortlistChannel.send({
-                content: `⭐ **Shortlisted Content (Admin Override)** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
+                content: `⭐ **${shortlistNumber}. Shortlisted Content (Admin Override)** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
                 components: [rateRow1, rateRow2, rejectRow]
               });
             }

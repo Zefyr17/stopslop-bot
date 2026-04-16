@@ -16,6 +16,8 @@ enum PostStatus {
   PENDING
   REJECTED
   SHORTLISTED
+  FLAGGED_APPROVE
+  FLAGGED_REJECT
 }
 
 enum VoteType {
@@ -64,6 +66,7 @@ model Post {
   week               Week       @relation(fields: [weekId], references: [id])
   votes              Vote[]
   ratings            Rating[]
+  feedbacks          PostFeedback[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 }
@@ -171,6 +174,22 @@ model QualityGuardTicket {
   updatedAt DateTime @updatedAt
 
   @@unique([oderId, guildId])
+}
+
+// Stores voter feedback on posts, delivered to authors on /week close
+model PostFeedback {
+  id        String   @id @default(cuid())
+  postId    String
+  voterId   String
+  voteType  VoteType
+  feedback  String
+  weekId    String
+  guildId   String
+  sent      Boolean  @default(false)
+  post      Post     @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([postId, voterId])
 }
 
 // Tracks spam penalties per post (one penalty per post max)

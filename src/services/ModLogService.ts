@@ -1,4 +1,4 @@
-import { EmbedBuilder, TextChannel } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel } from 'discord.js';
 import { guildConfigService } from './GuildConfigService';
 import { bot } from '../bot';
 
@@ -21,6 +21,7 @@ export enum ModLogEventType {
   WEIGHT_BOOST_REVOKED = 'WEIGHT_BOOST_REVOKED',
   RAFFLE_DRAWN = 'RAFFLE_DRAWN',
   RAFFLE_ROLE_SET = 'RAFFLE_ROLE_SET',
+  CONTENT_FLAGGED = 'CONTENT_FLAGGED',
 }
 
 interface ModLogData {
@@ -43,6 +44,7 @@ interface ModLogData {
   penaltyCount?: number;
   postLimit?: number;
   winners?: Array<{ oderId: string; tickets: number }>;
+  flagReason?: 'upvote' | 'downvote';
 }
 
 export class ModLogService {
@@ -66,6 +68,69 @@ export class ModLogService {
       await (channel as TextChannel).send({ embeds: [embed] });
     } catch (error) {
       console.error('Failed to send mod log:', error);
+    }
+  }
+
+  /**
+   * Send a flagged-content embed with Approve/Reject buttons to the mod log channel.
+   * Returns the sent message ID so it can be stored if needed.
+   */
+  async logFlagged(guildId: string, data: ModLogData): Promise<string | null> {
+    try {
+      const config = await guildConfigService.getConfig(guildId);
+      if (!config?.modLogChannelId) return null;
+
+      const channel = await bot.channels.fetch(config.modLogChannelId);
+      if (!channel || !channel.isTextBased()) return null;
+
+      const isCommunityApproved = data.flagReason === 'upvote';
+
+      const embed = new EmbedBuilder()
+        .setTimestamp()
+        .setColor(isCommunityApproved ? 0x00ff00 : 0xff0000)
+        .setTitle(isCommunityApproved ? '🟢 Community Approved — Awaiting Final Decision' : '🔴 Community Rejected — Awaiting Final Decision')
+        .setDescription(
+          isCommunityApproved
+            ? `Community reached the upvote threshold. Approve to shortlist or reject.`
+            : `Community reached the downvote threshold. Reject or approve anyway.`
+        )
+        .addFields(
+          { name: 'Post ID', value: data.postId || 'Unknown', inline: true },
+          { name: 'Author', value: data.authorId ? `<@${data.authorId}>` : 'Unknown', inline: true },
+          { name: 'Votes', value: `👍 ${data.votes?.upvotes ?? 0} | 👎 ${data.votes?.downvotes ?? 0}`, inline: true }
+        );
+
+      if (data.monitoredChannelId) {
+        embed.addFields({ name: 'Channel', value: `<#${data.monitoredChannelId}>`, inline: true });
+      }
+      if (data.postLink) {
+        embed.addFields({ name: 'Link', value: data.postLink });
+      }
+      if (data.votersList && data.votersList.length > 0) {
+        const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);
+        const downvoters = data.votersList.filter(v => v.voteType === 'DOWN').map(v => `<@${v.userId}>`);
+        let votersText = '';
+        if (upvoters.length > 0) votersText += `**👍 Yes (${upvoters.length}):** ${upvoters.join(', ')}\n`;
+        if (downvoters.length > 0) votersText += `**👎 No (${downvoters.length}):** ${downvoters.join(', ')}`;
+        if (votersText) embed.addFields({ name: 'Voters', value: votersText });
+      }
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`flag_approve_${data.postId}`)
+          .setLabel('✅ Approve')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`flag_reject_${data.postId}`)
+          .setLabel('❌ Reject')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      const msg = await (channel as TextChannel).send({ embeds: [embed], components: [row] });
+      return msg.id;
+    } catch (error) {
+      console.error('Failed to send flagged content log:', error);
+      return null;
     }
   }
 
@@ -371,6 +436,14 @@ export class ModLogService {
         if (data.details) {
           embed.addFields({ name: 'Details', value: data.details });
         }
+        break;
+
+      case ModLogEventType.CONTENT_FLAGGED:
+        embed
+          .setColor(0xffa500)
+          .setTitle('🚩 Content Flagged')
+          .setDescription('Post reached voting threshold and is pending admin decision.');
+        if (data.postLink) embed.addFields({ name: 'Link', value: data.postLink });
         break;
 
       default:

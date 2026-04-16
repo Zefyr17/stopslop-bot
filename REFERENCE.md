@@ -43,6 +43,7 @@ prisma/
 | Model | Key Fields | Notes |
 |---|---|---|
 | **User** | `discordId` (unique) | Created on first interaction |
+| **PostFeedback** | `postId`, `voterId`, `voteType`, `feedback`, `weekId`, `guildId`, `sent` | One per (post, voter). Delivered via DM on `/week close` |
 | **GuildConfig** | `guildId`, `voterRoleIds[]`, `judgeRoleIds[]`, `adminRoleIds[]`, `unlimitedRoleIds[]`, `upvoteThreshold`, `downvoteThreshold`, `defaultPostLimit`, `modLogChannelId`, `raffleRoleId` | One per guild, auto-created on join |
 | **ChannelPair** | `guildConfigId`, `monitoredChannelId`, `shortlistChannelId` | Many per guild |
 | **Week** | `monitoredChannelId`, `status` (ACTIVE/CLOSED), `rankingOpen`, `startDate`, `endDate` | Unique per (channel, startDate). Independent per channel |
@@ -58,7 +59,7 @@ prisma/
 ---
 
 ## Enums
-- `PostStatus`: PENDING | REJECTED | SHORTLISTED
+- `PostStatus`: PENDING | REJECTED | SHORTLISTED | FLAGGED_APPROVE | FLAGGED_REJECT
 - `VoteType`: UP | DOWN
 - `WeekStatus`: ACTIVE | CLOSED
 
@@ -179,12 +180,15 @@ prisma/
   8. Warns user if they have 1 slot left
 
 ### 3. Voting Phase
-- Community clicks 👍 (Yes) or 👎 (No) buttons
+- Community clicks 👍 (Yes) or 👎 (No) buttons — a **modal popup** appears asking for optional feedback (max 500 chars), with a "Send without feedback" option (just submit empty)
+- Vote + optional feedback are recorded on modal submit
 - Vote change allowed with **20-second cooldown**
 - Weighted votes: default weight = 1, boosted = 2 (via `/weight grant`)
-- **Auto-shortlist** when weighted upvotes ≥ upvoteThreshold
-- **Auto-reject** when weighted downvotes ≥ downvoteThreshold
-  - If post had 0 upvotes when rejected → spam penalty added to author
+- **Auto-flag for review** when either threshold is reached — no automatic status change
+  - Upvote threshold reached → status → `FLAGGED_APPROVE`, embed sent to mod log with ✅ Approve / ❌ Reject buttons
+  - Downvote threshold reached → status → `FLAGGED_REJECT`, embed sent to mod log with ✅ Approve / ❌ Reject buttons
+  - Admin presses **Approve** → post moves to `SHORTLISTED`, appears in shortlist channel with rating buttons
+  - Admin presses **Reject** → post moves to `REJECTED`; spam penalty applied if low quality (0 upvotes)
 
 ### 4. Shortlist Phase
 - Post moves to shortlist channel with embed:
@@ -216,6 +220,7 @@ prisma/
 
 ### 8. Close Phase
 - Admin runs `/week close <channel>`
+- Bot sends feedback DMs to post authors: all collected feedback grouped by author, delivered as one DM per author
 - Penalties from closed week now affect next week's post limit
 - Shortlisted posts from closed week give +1 recovery slot
 
@@ -264,6 +269,7 @@ Manual penalties: `/spam add-penalty <user> <channel>`
 |---|---|
 | POST_REJECTED_AUTO | 🔴 Red |
 | POST_SHORTLISTED_AUTO | 🟢 Green |
+| CONTENT_FLAGGED | 🟠 Orange (with Approve/Reject buttons) |
 | ADMIN_OVERRIDE_APPROVE | 🔵 Blue |
 | ADMIN_OVERRIDE_REJECT | 🟠 Orange |
 | ADMIN_OVERRIDE_RESET | 🟡 Yellow |

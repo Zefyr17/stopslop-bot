@@ -722,6 +722,13 @@ async function handleFlagApproveButton(interaction: ButtonInteraction, guildId: 
 
     await postService.updateStatus(postId, PostStatus.SHORTLISTED);
 
+    // If community rejected but admin approved — remove negative feedback so author doesn't receive it
+    if (post.status === PostStatus.FLAGGED_REJECT) {
+      await prisma.postFeedback.deleteMany({
+        where: { postId, voteType: 'DOWN' },
+      });
+    }
+
     // Post to shortlist channel
     if (post.monitoredChannelId) {
       const { channelPairService } = await import('./services/ChannelPairService');
@@ -1781,65 +1788,68 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           const closedWeek = await weekService.closeActiveWeek(monitoredChannelId);
 
-          // Send feedback DMs to post authors
-          const feedbacks = await prisma.postFeedback.findMany({
-            where: { weekId: closedWeek.id, sent: false },
-            include: { post: true },
-          });
-
-          // Group by authorId
-          const byAuthor = new Map<string, typeof feedbacks>();
-          for (const fb of feedbacks) {
-            const list = byAuthor.get(fb.post.authorId) ?? [];
-            list.push(fb);
-            byAuthor.set(fb.post.authorId, list);
-          }
-
-          for (const [authorId, authorFeedbacks] of byAuthor) {
+          // Send feedback DMs in background — does not block /week close response
+          const weekIdForDMs = closedWeek.id;
+          (async () => {
             try {
-              const discordUser = await bot.users.fetch(authorId);
-
-              // Group feedbacks by postId
-              const byPost = new Map<string, typeof authorFeedbacks>();
-              for (const fb of authorFeedbacks) {
-                const list = byPost.get(fb.postId) ?? [];
-                list.push(fb);
-                byPost.set(fb.postId, list);
-              }
-
-              const postBlocks: string[] = [];
-              for (const postFeedbacks of byPost.values() as IterableIterator<typeof authorFeedbacks>) {
-                const post = postFeedbacks[0].post;
-                const yesVotes = postFeedbacks.filter(fb => fb.voteType === 'UP').length;
-                const noVotes = postFeedbacks.filter(fb => fb.voteType === 'DOWN').length;
-
-                const yesComments = postFeedbacks.filter(fb => fb.voteType === 'UP');
-                const noComments = postFeedbacks.filter(fb => fb.voteType === 'DOWN');
-
-                let block = `**Vote Results for Your Post**\nVoting on your post has ended.\nFinal vote: **${yesVotes} Yes / ${noVotes} No**\n\n${post.link}`;
-
-                if (yesComments.length > 0) {
-                  block += `\n\n**Yes Reasons (${yesComments.length}):**\n${yesComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
-                }
-                if (noComments.length > 0) {
-                  block += `\n\n**No Reasons (${noComments.length}):**\n${noComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
-                }
-
-                postBlocks.push(block);
-              }
-
-              for (const block of postBlocks) {
-                await discordUser.send(block);
-              }
-
-              await prisma.postFeedback.updateMany({
-                where: { id: { in: authorFeedbacks.map(fb => fb.id) } },
-                data: { sent: true },
+              const feedbacks = await prisma.postFeedback.findMany({
+                where: { weekId: weekIdForDMs, sent: false },
+                include: { post: true },
               });
-            } catch {
-              // User has DMs closed or left the server — skip silently
+
+              // Group by authorId
+              const byAuthor = new Map<string, typeof feedbacks>();
+              for (const fb of feedbacks) {
+                const list = byAuthor.get(fb.post.authorId) ?? [];
+                list.push(fb);
+                byAuthor.set(fb.post.authorId, list);
+              }
+
+              for (const [authorId, authorFeedbacks] of byAuthor) {
+                try {
+                  const discordUser = await bot.users.fetch(authorId);
+
+                  // Group feedbacks by postId
+                  const byPost = new Map<string, typeof authorFeedbacks>();
+                  for (const fb of authorFeedbacks) {
+                    const list = byPost.get(fb.postId) ?? [];
+                    list.push(fb);
+                    byPost.set(fb.postId, list);
+                  }
+
+                  for (const postFeedbacks of byPost.values() as IterableIterator<typeof authorFeedbacks>) {
+                    const post = postFeedbacks[0].post;
+                    const yesVotes = postFeedbacks.filter(fb => fb.voteType === 'UP').length;
+                    const noVotes = postFeedbacks.filter(fb => fb.voteType === 'DOWN').length;
+                    const yesComments = postFeedbacks.filter(fb => fb.voteType === 'UP');
+                    const noComments = postFeedbacks.filter(fb => fb.voteType === 'DOWN');
+
+                    let block = `**Vote Results for Your Post**\nVoting on your post has ended.\nFinal vote: **${yesVotes} Yes / ${noVotes} No**\n\n${post.link}`;
+                    if (yesComments.length > 0) {
+                      block += `\n\n**Yes Reasons (${yesComments.length}):**\n${yesComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
+                    }
+                    if (noComments.length > 0) {
+                      block += `\n\n**No Reasons (${noComments.length}):**\n${noComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
+                    }
+
+                    await discordUser.send(block);
+                  }
+
+                  await prisma.postFeedback.updateMany({
+                    where: { id: { in: authorFeedbacks.map(fb => fb.id) } },
+                    data: { sent: true },
+                  });
+
+                  // Small delay between authors to avoid Discord rate limits
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                } catch {
+                  // User has DMs closed or left the server — skip silently
+                }
+              }
+            } catch (err) {
+              console.error('Error sending feedback DMs:', err);
             }
-          }
+          })();
 
           const startDate = closedWeek.startDate.toISOString().split('T')[0];
           const endDate = closedWeek.endDate.toISOString().split('T')[0];

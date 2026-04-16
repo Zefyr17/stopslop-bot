@@ -160,11 +160,11 @@ export class ModLogService {
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`flag_approve_${data.postId}`)
-          .setLabel('✅ Approve')
+          .setLabel('Approve')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`flag_reject_${data.postId}`)
-          .setLabel('❌ Reject')
+          .setLabel('Reject')
           .setStyle(ButtonStyle.Danger)
       );
 

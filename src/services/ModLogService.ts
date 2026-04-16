@@ -2,6 +2,22 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel
 import { guildConfigService } from './GuildConfigService';
 import { bot } from '../bot';
 
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0)' },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export enum ModLogEventType {
   POST_REJECTED_AUTO = 'POST_REJECTED_AUTO',
   POST_SHORTLISTED_AUTO = 'POST_SHORTLISTED_AUTO',
@@ -105,6 +121,8 @@ export class ModLogService {
       }
       if (data.postLink) {
         embed.addFields({ name: 'Link', value: data.postLink });
+        const ogImage = await fetchOgImage(data.postLink);
+        if (ogImage) embed.setImage(ogImage);
       }
       if (data.votersList && data.votersList.length > 0) {
         const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);

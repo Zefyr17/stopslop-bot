@@ -2,19 +2,42 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel
 import { guildConfigService } from './GuildConfigService';
 import { bot } from '../bot';
 
-async function fetchOgImage(url: string): Promise<string | null> {
+interface OgData {
+  image?: string;
+  title?: string;
+  description?: string;
+  authorName?: string;
+}
+
+async function fetchOgData(url: string): Promise<OgData> {
   try {
-    const res = await fetch(url, {
+    // For X/Twitter use fxtwitter which provides proper OG tags for bots
+    const isTwitter = /https?:\/\/(www\.)?(x\.com|twitter\.com)/.test(url);
+    const fetchUrl = isTwitter
+      ? url.replace(/https?:\/\/(www\.)?(x\.com|twitter\.com)/, 'https://fxtwitter.com')
+      : url;
+
+    const res = await fetch(fetchUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0)' },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return {};
+
     const html = await res.text();
-    const match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-    return match?.[1] ?? null;
+
+    const getMeta = (property: string): string | undefined => {
+      const match = html.match(new RegExp(`<meta[^>]+property=["']${property}["'][^>]+content=["']([^"']+)["']`, 'i'))
+        ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${property}["']`, 'i'));
+      return match?.[1];
+    };
+
+    return {
+      image: getMeta('og:image'),
+      title: getMeta('og:title'),
+      description: getMeta('og:description'),
+    };
   } catch {
-    return null;
+    return {};
   }
 }
 
@@ -121,8 +144,9 @@ export class ModLogService {
       }
       if (data.postLink) {
         embed.addFields({ name: 'Link', value: data.postLink });
-        const ogImage = await fetchOgImage(data.postLink);
-        if (ogImage) embed.setImage(ogImage);
+        const og = await fetchOgData(data.postLink);
+        if (og.title) embed.addFields({ name: 'Tweet', value: og.title + (og.description ? `\n${og.description}` : '') });
+        if (og.image) embed.setImage(og.image);
       }
       if (data.votersList && data.votersList.length > 0) {
         const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);

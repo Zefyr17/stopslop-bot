@@ -92,7 +92,12 @@ export class SpamPenaltyService {
         },
       });
 
-      currentLimit = Math.min(defaultLimit, Math.max(1, currentLimit - penalties + shortlisted));
+      // 3+ penalties in a week → hard ban next week (limit = 0)
+      if (penalties >= 3) {
+        currentLimit = 0;
+      } else {
+        currentLimit = Math.min(defaultLimit, Math.max(1, currentLimit - penalties + shortlisted));
+      }
       lastWeekPenalties = penalties;
       lastWeekShortlisted = shortlisted;
     }

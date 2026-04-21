@@ -110,6 +110,7 @@ model GuildConfig {
   downvoteThreshold    Int           @default(5)
   defaultPostLimit     Int           @default(3)
   raffleRoleId         String?
+  ticketChannelId      String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 }

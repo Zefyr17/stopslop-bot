@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder, TextChannel, ModalBuilder, TextInputBuilder, TextInputStyle, type ModalSubmitInteraction } from 'discord.js';
+import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder, TextChannel } from 'discord.js';
 import { guildConfigService } from './services/GuildConfigService';
 import { postService } from './services/PostService';
 import { voteService } from './services/VoteService';
@@ -342,9 +342,15 @@ bot.on(Events.MessageCreate, async (message) => {
 
       // Reply in channel before deleting so the user sees it
       try {
-        let replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
-        if (postLimitCheck.penaltyBalance > 0) {
-          replyText += ` Your limit is reduced due to past penalties — get your posts shortlisted to recover +1 slot per shortlist.`;
+        let replyText: string;
+        if (postLimitCheck.limit === 0) {
+          const ticketMention = config.ticketChannelId ? ` Open a ticket in <#${config.ticketChannelId}> to get feedback on your content.` : ' Please contact an admin to get feedback on your content.';
+          replyText = `<@${message.author.id}> Your post limit has been set to 0 due to low-quality content in the previous week.${ticketMention}`;
+        } else {
+          replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
+          if (postLimitCheck.penaltyBalance > 0) {
+            replyText += ` Your limit is reduced due to past penalties — get your posts shortlisted to recover +1 slot per shortlist.`;
+          }
         }
         const replyMsg = await message.reply({ content: replyText, allowedMentions: { repliedUser: false } });
         // Auto-delete the reply after 10 seconds
@@ -448,11 +454,6 @@ bot.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.isModalSubmit() && interaction.customId.startsWith('vote_feedback_')) {
-    await handleVoteFeedbackModal(interaction, guildId);
-    return;
-  }
-
   if (interaction.isButton()) {
     const customId = interaction.customId;
 
@@ -480,28 +481,7 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-  try {
-    // Show feedback modal — vote is recorded on modal submit
-    const voteType = customId.startsWith('upvote_') ? 'UP' : 'DOWN';
-    const postId = customId.replace('upvote_', '').replace('downvote_', '');
-
-    const modal = new ModalBuilder()
-      .setCustomId(`vote_feedback_${voteType}_${postId}`)
-      .setTitle(voteType === 'UP' ? '👍 You voted Yes' : '👎 You voted No');
-
-    const feedbackInput = new TextInputBuilder()
-      .setCustomId('feedback_text')
-      .setLabel('Feedback for the author (optional)')
-      .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('What did you like or dislike about this content?')
-      .setRequired(false)
-      .setMaxLength(500);
-
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(feedbackInput));
-    await interaction.showModal(modal);
-  } catch (error) {
-    console.error('Error showing vote modal:', error);
-  }
+  await handleVoteButton(interaction, guildId);
   }
 
 });
@@ -574,78 +554,63 @@ async function handleShortlistRejectButton(interaction: ButtonInteraction, guild
   }
 }
 
-async function handleVoteFeedbackModal(interaction: ModalSubmitInteraction, guildId: string) {
+async function handleVoteButton(interaction: ButtonInteraction, guildId: string) {
   try {
-    await interaction.deferReply({ ephemeral: true });
-
-    // customId format: vote_feedback_UP_<postId> or vote_feedback_DOWN_<postId>
-    const parts = interaction.customId.split('_');
-    // parts: ['vote', 'feedback', 'UP'|'DOWN', ...postId parts]
-    const voteTypeStr = parts[2] as 'UP' | 'DOWN';
-    const postId = parts.slice(3).join('_');
-    const voteType = voteTypeStr === 'UP' ? VoteType.UP : VoteType.DOWN;
-    const feedbackText = interaction.fields.getTextInputValue('feedback_text').trim();
+    await interaction.deferUpdate();
 
     const config = await guildConfigService.getConfig(guildId);
     if (!config) {
-      await interaction.editReply({ content: 'Configuration not found.' });
+      await interaction.followUp({ content: 'Configuration not found.', ephemeral: true });
       return;
     }
 
     const member = await interaction.guild!.members.fetch(interaction.user.id);
     const hasVoterRole = config.voterRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
     if (config.voterRoleIds.length > 0 && !hasVoterRole) {
-      await interaction.editReply({ content: '❌ You are not allowed to vote.' });
+      await interaction.followUp({ content: '❌ You are not allowed to vote.', ephemeral: true });
       return;
     }
 
-    const post = await postService.getPostById(postId);
+    const post = await postService.getPostByReviewMessageId(interaction.message.id);
     if (!post) {
-      await interaction.editReply({ content: '❌ Post not found.' });
+      await interaction.followUp({ content: 'Post not found.', ephemeral: true });
       return;
     }
 
     const week = await weekService.getWeekById(post.weekId);
     if (week?.status === WeekStatus.CLOSED) {
-      await interaction.editReply({ content: '❌ Cannot vote on posts from a closed week.' });
+      await interaction.followUp({ content: '❌ Cannot vote on posts from a closed week.', ephemeral: true });
       return;
     }
 
     if (post.status !== PostStatus.PENDING) {
-      await interaction.editReply({ content: '❌ This post has already been decided.' });
+      await interaction.followUp({ content: 'This post has already been decided.', ephemeral: true });
       return;
     }
 
     const cooldownCheck = await voteService.canUserChangeVote(post.id, interaction.user.id, 20);
     if (!cooldownCheck.canChange) {
-      await interaction.editReply({
+      await interaction.followUp({
         content: `❌ You can change your vote again in ${cooldownCheck.secondsRemaining} second${cooldownCheck.secondsRemaining !== 1 ? 's' : ''}.`,
+        ephemeral: true,
       });
       return;
     }
 
+    const voteType = interaction.customId.startsWith('upvote_') ? VoteType.UP : VoteType.DOWN;
     await voteService.recordVote(post.id, interaction.user.id, voteType);
 
     const verifyVote = await voteService.getUserVote(post.id, interaction.user.id);
     if (!verifyVote || verifyVote.type !== voteType) {
       console.error(`[Vote] VERIFICATION FAILED for user ${interaction.user.id} on post ${post.id}`);
-      await interaction.editReply({ content: '❌ Vote verification failed. Please try again.' });
+      await interaction.followUp({ content: '❌ Vote verification failed. Please try again.', ephemeral: true });
       return;
     }
 
-    // Save feedback if provided
-    if (feedbackText.length > 0) {
-      await prisma.postFeedback.upsert({
-        where: { postId_voterId: { postId: post.id, voterId: interaction.user.id } },
-        update: { feedback: feedbackText, voteType, weekId: post.weekId, guildId },
-        create: { postId: post.id, voterId: interaction.user.id, voteType, feedback: feedbackText, weekId: post.weekId, guildId },
-      });
-    }
-
-    // Check thresholds and flag if needed
     const weightedVoteCounts = await voteService.getWeightedVoteCounts(post.id, guildId);
     const freshPost = await postService.getPostById(post.id);
 
+    let statusChanged = false;
     if (freshPost?.status === PostStatus.PENDING) {
       const votersList = await voteService.getAllVotesWithUsers(post.id);
       const flagData = {
@@ -658,40 +623,66 @@ async function handleVoteFeedbackModal(interaction: ModalSubmitInteraction, guil
       };
 
       if (weightedVoteCounts.weightedDownvotes >= config.downvoteThreshold) {
+        // Community rejected — flag for admin review
         await postService.updateStatus(post.id, PostStatus.FLAGGED_REJECT);
         await modLogService.logFlagged(guildId, { ...flagData, flagReason: 'downvote' });
+        statusChanged = true;
       } else if (weightedVoteCounts.weightedUpvotes >= config.upvoteThreshold) {
-        await postService.updateStatus(post.id, PostStatus.FLAGGED_APPROVE);
-        await modLogService.logFlagged(guildId, { ...flagData, flagReason: 'upvote' });
+        // Community approved — auto-shortlist immediately
+        await postService.updateStatus(post.id, PostStatus.SHORTLISTED);
+        statusChanged = true;
+
+        await modLogService.log(guildId, ModLogEventType.POST_SHORTLISTED_AUTO, flagData);
+
+        if (post.monitoredChannelId) {
+          const { channelPairService } = await import('./services/ChannelPairService');
+          const shortlistChannelId = await channelPairService.getShortlistChannelId(guildId, post.monitoredChannelId);
+          if (shortlistChannelId) {
+            const shortlistChannel = await interaction.guild!.channels.fetch(shortlistChannelId);
+            if (shortlistChannel?.isTextBased()) {
+              const rateRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`rate_${post.id}_1`).setLabel('1⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_2`).setLabel('2⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_3`).setLabel('3⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_4`).setLabel('4⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_5`).setLabel('5⭐').setStyle(ButtonStyle.Primary)
+              );
+              const rateRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`rate_${post.id}_6`).setLabel('6⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_7`).setLabel('7⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_8`).setLabel('8⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_9`).setLabel('9⭐').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rate_${post.id}_10`).setLabel('10⭐').setStyle(ButtonStyle.Primary)
+              );
+              const rejectRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setCustomId(`shortlist_reject_${post.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
+              );
+              const shortlistNumber = await prisma.post.count({
+                where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
+              });
+              await (shortlistChannel as TextChannel).send({
+                content: `⭐ **${shortlistNumber}. Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
+                components: [rateRow1, rateRow2, rejectRow],
+              });
+            }
+          }
+        }
       }
     }
 
-    // Update Yes/No buttons on the original message — need to find it via reviewMessageId
-    if (post.reviewMessageId && post.monitoredChannelId) {
-      try {
-        const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
-        if (channel?.isTextBased()) {
-          const reviewMessage = await (channel as TextChannel).messages.fetch(post.reviewMessageId);
-          const freshPost2 = await postService.getPostById(post.id);
-          const isDecided = freshPost2 && freshPost2.status !== PostStatus.PENDING;
-          const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`upvote_${post.id}`).setLabel('Yes').setStyle(ButtonStyle.Primary).setDisabled(isDecided ?? false),
-            new ButtonBuilder().setCustomId(`downvote_${post.id}`).setLabel('No').setStyle(ButtonStyle.Secondary).setDisabled(isDecided ?? false)
-          );
-          await reviewMessage.edit({ components: [disabledRow] });
-        }
-      } catch (err) {
-        console.error('Failed to update review message buttons:', err);
-      }
-    }
+    const isDecided = statusChanged;
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`upvote_${post.id}`).setLabel('Yes').setStyle(ButtonStyle.Primary).setDisabled(isDecided),
+      new ButtonBuilder().setCustomId(`downvote_${post.id}`).setLabel('No').setStyle(ButtonStyle.Secondary).setDisabled(isDecided)
+    );
+    await interaction.message.edit({ components: [buttonRow] });
 
     const voteLabel = voteType === VoteType.UP ? 'Yes' : 'No';
-    const feedbackNote = feedbackText.length > 0 ? ' Your feedback will be sent to the author at the end of the week.' : '';
-    await interaction.editReply({ content: `✅ You voted **${voteLabel}**.${feedbackNote}` });
+    await interaction.followUp({ content: `✅ You voted **${voteLabel}**.`, ephemeral: true });
   } catch (error) {
-    console.error('Error handling vote feedback modal:', error);
+    console.error('Error processing vote:', error);
     try {
-      await interaction.editReply({ content: '❌ Failed to process vote.' });
+      await interaction.followUp({ content: '❌ Failed to process vote.', ephemeral: true });
     } catch {}
   }
 }
@@ -721,13 +712,6 @@ async function handleFlagApproveButton(interaction: ButtonInteraction, guildId: 
     }
 
     await postService.updateStatus(postId, PostStatus.SHORTLISTED);
-
-    // If community rejected but admin approved — remove negative feedback so author doesn't receive it
-    if (post.status === PostStatus.FLAGGED_REJECT) {
-      await prisma.postFeedback.deleteMany({
-        where: { postId, voteType: 'DOWN' },
-      });
-    }
 
     // Post to shortlist channel
     if (post.monitoredChannelId) {
@@ -1145,6 +1129,20 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           content: `✅ Mod log channel set to <#${channel.id}>`,
           ephemeral: true,
         });
+        return;
+      }
+
+      if (subcommand === 'set-ticket-channel') {
+        const channel = interaction.options.getChannel('channel', true);
+        if (channel?.type !== ChannelType.GuildText) {
+          await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+          return;
+        }
+        await prisma.guildConfig.update({
+          where: { guildId },
+          data: { ticketChannelId: channel.id },
+        });
+        await interaction.reply({ content: `✅ Ticket channel set to <#${channel.id}>`, ephemeral: true });
         return;
       }
 
@@ -1787,69 +1785,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const allPosts = await postService.getPostsByWeek(activeWeek.id);
 
           const closedWeek = await weekService.closeActiveWeek(monitoredChannelId);
-
-          // Send feedback DMs in background — does not block /week close response
-          const weekIdForDMs = closedWeek.id;
-          (async () => {
-            try {
-              const feedbacks = await prisma.postFeedback.findMany({
-                where: { weekId: weekIdForDMs, sent: false },
-                include: { post: true },
-              });
-
-              // Group by authorId
-              const byAuthor = new Map<string, typeof feedbacks>();
-              for (const fb of feedbacks) {
-                const list = byAuthor.get(fb.post.authorId) ?? [];
-                list.push(fb);
-                byAuthor.set(fb.post.authorId, list);
-              }
-
-              for (const [authorId, authorFeedbacks] of byAuthor) {
-                try {
-                  const discordUser = await bot.users.fetch(authorId);
-
-                  // Group feedbacks by postId
-                  const byPost = new Map<string, typeof authorFeedbacks>();
-                  for (const fb of authorFeedbacks) {
-                    const list = byPost.get(fb.postId) ?? [];
-                    list.push(fb);
-                    byPost.set(fb.postId, list);
-                  }
-
-                  for (const postFeedbacks of byPost.values() as IterableIterator<typeof authorFeedbacks>) {
-                    const post = postFeedbacks[0].post;
-                    const yesVotes = postFeedbacks.filter(fb => fb.voteType === 'UP').length;
-                    const noVotes = postFeedbacks.filter(fb => fb.voteType === 'DOWN').length;
-                    const yesComments = postFeedbacks.filter(fb => fb.voteType === 'UP');
-                    const noComments = postFeedbacks.filter(fb => fb.voteType === 'DOWN');
-
-                    let block = `**Vote Results for Your Post**\nVoting on your post has ended.\nFinal vote: **${yesVotes} Yes / ${noVotes} No**\n\n${post.link}`;
-                    if (yesComments.length > 0) {
-                      block += `\n\n**Yes Reasons (${yesComments.length}):**\n${yesComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
-                    }
-                    if (noComments.length > 0) {
-                      block += `\n\n**No Reasons (${noComments.length}):**\n${noComments.map(fb => `• ${fb.feedback}`).join('\n')}`;
-                    }
-
-                    await discordUser.send(block);
-                  }
-
-                  await prisma.postFeedback.updateMany({
-                    where: { id: { in: authorFeedbacks.map(fb => fb.id) } },
-                    data: { sent: true },
-                  });
-
-                  // Small delay between authors to avoid Discord rate limits
-                  await new Promise(resolve => setTimeout(resolve, 500));
-                } catch {
-                  // User has DMs closed or left the server — skip silently
-                }
-              }
-            } catch (err) {
-              console.error('Error sending feedback DMs:', err);
-            }
-          })();
 
           const startDate = closedWeek.startDate.toISOString().split('T')[0];
           const endDate = closedWeek.endDate.toISOString().split('T')[0];

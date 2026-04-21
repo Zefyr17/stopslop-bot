@@ -52,6 +52,14 @@ export const commands = [
             .setMaxValue(10)))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('set-ticket-channel')
+        .setDescription('Set the ticket channel for users to appeal post limits (Admin only)')
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel where users can open tickets')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('reset')
         .setDescription('Reset server configuration to defaults (Admin only)')),
 

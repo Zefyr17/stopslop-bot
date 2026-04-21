@@ -678,7 +678,7 @@ async function handleVoteButton(interaction: ButtonInteraction, guildId: string)
     await interaction.message.edit({ components: [buttonRow] });
 
     const voteLabel = voteType === VoteType.UP ? 'Yes' : 'No';
-    await interaction.followUp({ content: `✅ You voted **${voteLabel}**.`, ephemeral: true });
+    await interaction.followUp({ content: `You voted **${voteLabel}**.`, ephemeral: true });
   } catch (error) {
     console.error('Error processing vote:', error);
     try {

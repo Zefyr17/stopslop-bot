@@ -63,6 +63,7 @@ model Post {
   monitoredChannelId String?
   originalMessage    String?
   reviewMessageId    String?
+  flaggedMessageId   String?
   week               Week       @relation(fields: [weekId], references: [id])
   votes              Vote[]
   ratings            Rating[]

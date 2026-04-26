@@ -3022,8 +3022,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
 
         const channelFilter = interaction.options.getChannel('channel');
-        const where: any = { status: PostStatus.FLAGGED_REJECT };
+        const weekIdFilter = interaction.options.getString('week_id');
+        const where: any = { status: PostStatus.FLAGGED_REJECT, flaggedMessageId: null };
         if (channelFilter) where.monitoredChannelId = channelFilter.id;
+        if (weekIdFilter) where.weekId = weekIdFilter;
 
         const flaggedPosts = await prisma.post.findMany({
           where,
@@ -3032,7 +3034,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         });
 
         if (flaggedPosts.length === 0) {
-          await interaction.editReply({ content: '✅ No FLAGGED_REJECT posts found.' });
+          await interaction.editReply({ content: '✅ No pending FLAGGED_REJECT posts found (all already have embeds).' });
           return;
         }
 

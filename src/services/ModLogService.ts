@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel } from 'discord.js';
 import { guildConfigService } from './GuildConfigService';
 import { bot } from '../bot';
+import { prisma } from '../db';
 
 interface OgData {
   image?: string;
@@ -173,6 +174,14 @@ export class ModLogService {
       );
 
       const msg = await (channel as TextChannel).send({ embeds: [embed], components: [row] });
+
+      if (data.postId) {
+        await prisma.post.update({
+          where: { id: data.postId },
+          data: { flaggedMessageId: msg.id },
+        });
+      }
+
       return msg.id;
     } catch (error) {
       console.error('Failed to send flagged content log:', error);

@@ -364,7 +364,11 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('resend-flagged')
-        .setDescription('Resend mod-log embeds for all FLAGGED_REJECT posts that are missing one (Admin only)')
+        .setDescription('Resend mod-log embeds for FLAGGED_REJECT posts missing an embed (Admin only)')
+        .addStringOption(option =>
+          option.setName('week_id')
+            .setDescription('Filter by week ID (use /week list to find IDs)')
+            .setRequired(false))
         .addChannelOption(option =>
           option.setName('channel')
             .setDescription('Filter by monitored channel (optional)')

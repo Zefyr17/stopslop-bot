@@ -144,9 +144,13 @@ export class ModLogService {
       }
       if (data.postLink) {
         embed.addFields({ name: 'Link', value: data.postLink });
-        const og = await fetchOgData(data.postLink);
-        if (og.title) embed.addFields({ name: 'Tweet', value: og.title + (og.description ? `\n${og.description}` : '') });
-        if (og.image) embed.setImage(og.image);
+        try {
+          const og = await fetchOgData(data.postLink);
+          if (og.title) embed.addFields({ name: 'Tweet', value: og.title + (og.description ? `\n${og.description}` : '') });
+          if (og.image) embed.setImage(og.image);
+        } catch (ogError) {
+          console.error('Failed to fetch OG data for flagged embed:', ogError);
+        }
       }
       if (data.votersList && data.votersList.length > 0) {
         const upvoters = data.votersList.filter(v => v.voteType === 'UP').map(v => `<@${v.userId}>`);

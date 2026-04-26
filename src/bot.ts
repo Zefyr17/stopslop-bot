@@ -3002,6 +3002,69 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
     }
+    if (commandName === 'admin') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ You do not have permission to use this command.', ephemeral: true });
+        return;
+      }
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'resend-flagged') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const config = await guildConfigService.getConfig(guildId);
+        if (!config?.modLogChannelId) {
+          await interaction.editReply({ content: '❌ No mod-log channel configured. Use `/config set-mod-log` first.' });
+          return;
+        }
+
+        const channelFilter = interaction.options.getChannel('channel');
+        const where: any = { status: PostStatus.FLAGGED_REJECT };
+        if (channelFilter) where.monitoredChannelId = channelFilter.id;
+
+        const flaggedPosts = await prisma.post.findMany({
+          where,
+          include: { votes: true },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (flaggedPosts.length === 0) {
+          await interaction.editReply({ content: '✅ No FLAGGED_REJECT posts found.' });
+          return;
+        }
+
+        let sent = 0;
+        let failed = 0;
+        for (const post of flaggedPosts) {
+          try {
+            const weightedVotes = await voteService.getWeightedVoteCounts(post.id, guildId);
+            const votersList = post.votes.map(v => ({ userId: v.userId, voteType: v.type as string }));
+            await modLogService.logFlagged(guildId, {
+              postId: post.id,
+              postLink: post.link,
+              authorId: post.authorId,
+              monitoredChannelId: post.monitoredChannelId || undefined,
+              votes: { upvotes: weightedVotes.weightedUpvotes, downvotes: weightedVotes.weightedDownvotes },
+              votersList,
+              flagReason: 'downvote',
+            });
+            sent++;
+          } catch (err) {
+            console.error(`[admin resend-flagged] Failed for post ${post.id}:`, err);
+            failed++;
+          }
+        }
+
+        await interaction.editReply({
+          content: `Done. Sent **${sent}** embed(s) to mod-log.${failed > 0 ? ` Failed: **${failed}**.` : ''}`,
+        });
+        return;
+      }
+    }
+
     if (commandName === 'weight') {
       const subcommand = interaction.options.getSubcommand();
 

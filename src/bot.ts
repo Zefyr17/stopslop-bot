@@ -1395,8 +1395,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return b.stats.totalRatings - a.stats.totalRatings;
       });
 
-      const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
-
       // Get channel name for title
       let channelName = 'Contest';
       if (monitoredChannel) {
@@ -1422,27 +1420,23 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
       };
 
-      // Top 5 winners
-      for (let i = 0; i < Math.min(5, postsWithRatings.length); i++) {
-        const item = postsWithRatings[i];
-        const medal = medals[i];
-        const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
-        const ratingCount = item.stats.totalRatings;
-        const username = await getUserDisplay(item.post.authorId);
-        resultLines.push(`${medal} ${username} • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
-        resultLines.push(item.post.link);
-        resultLines.push('');
+      // Group posts by floor(averageRating), sorted descending
+      const groups = new Map<number, typeof postsWithRatings>();
+      for (const item of postsWithRatings) {
+        const bucket = Math.floor(item.stats.averageRating);
+        if (!groups.has(bucket)) groups.set(bucket, []);
+        groups.get(bucket)!.push(item);
       }
+      const sortedBuckets = Array.from(groups.keys()).sort((a, b) => b - a);
 
-      // Honorary Contributions (6+)
-      if (postsWithRatings.length > 5) {
-        resultLines.push('✨ Honorary Contributions');
-        for (let i = 5; i < postsWithRatings.length; i++) {
-          const item = postsWithRatings[i];
+      for (const bucket of sortedBuckets) {
+        resultLines.push(`**${bucket} points**`);
+        for (const item of groups.get(bucket)!) {
           const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
           const ratingCount = item.stats.totalRatings;
           const username = await getUserDisplay(item.post.authorId);
-          resultLines.push(`${username} ${item.post.link} • ⭐ ${avgRating} (${ratingCount})`);
+          resultLines.push(`${username} • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
+          resultLines.push(item.post.link);
         }
         resultLines.push('');
       }

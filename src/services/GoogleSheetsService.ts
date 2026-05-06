@@ -16,6 +16,8 @@ function getAuth() {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!json) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON env var not set');
   const credentials = JSON.parse(json);
+  console.log('[GoogleSheets] Auth client_email:', credentials.client_email);
+  console.log('[GoogleSheets] Auth private_key_id:', credentials.private_key_id);
   return new google.auth.GoogleAuth({
     credentials,
     scopes: [

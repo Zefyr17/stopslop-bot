@@ -1420,28 +1420,82 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
       };
 
-      // Group posts by floor(averageRating), sorted descending
-      const groups = new Map<number, typeof postsWithRatings>();
+      // Group all posts by authorId, keeping them sorted by rating desc
+      const byAuthor = new Map<string, typeof postsWithRatings>();
       for (const item of postsWithRatings) {
-        const bucket = Math.floor(item.stats.averageRating);
-        if (!groups.has(bucket)) groups.set(bucket, []);
-        groups.get(bucket)!.push(item);
+        if (!byAuthor.has(item.post.authorId)) byAuthor.set(item.post.authorId, []);
+        byAuthor.get(item.post.authorId)!.push(item);
+      }
+
+      // Each author's entry goes into the bucket of their BEST post
+      // authorId → best bucket
+      type AuthorEntry = { authorId: string; bestBucket: number; posts: typeof postsWithRatings };
+      const authorEntries: AuthorEntry[] = [];
+      for (const [authorId, posts] of byAuthor) {
+        const bestBucket = Math.floor(posts[0].stats.averageRating); // already sorted desc
+        authorEntries.push({ authorId, bestBucket, posts });
+      }
+
+      // Group author entries by bestBucket
+      const groups = new Map<number, AuthorEntry[]>();
+      for (const entry of authorEntries) {
+        if (!groups.has(entry.bestBucket)) groups.set(entry.bestBucket, []);
+        groups.get(entry.bestBucket)!.push(entry);
       }
       const sortedBuckets = Array.from(groups.keys()).sort((a, b) => b - a);
 
       for (const bucket of sortedBuckets) {
         resultLines.push(`**${bucket} points**`);
-        for (const item of groups.get(bucket)!) {
-          const avgRating = item.stats.averageRating > 0 ? item.stats.averageRating.toFixed(2) : 'N/A';
-          const ratingCount = item.stats.totalRatings;
-          const username = await getUserDisplay(item.post.authorId);
-          resultLines.push(`${username} • ⭐ ${avgRating} avg (${ratingCount} rating${ratingCount !== 1 ? 's' : ''})`);
-          resultLines.push(item.post.link);
+        for (const entry of groups.get(bucket)!) {
+          const username = await getUserDisplay(entry.authorId);
+          // Best post first
+          const best = entry.posts[0];
+          const bestAvg = best.stats.averageRating > 0 ? best.stats.averageRating.toFixed(2) : 'N/A';
+          const bestCount = best.stats.totalRatings;
+          resultLines.push(`${username} • ⭐ ${bestAvg} avg (${bestCount} rating${bestCount !== 1 ? 's' : ''})`);
+          resultLines.push(best.post.link);
+          // Additional posts as sub-entries
+          for (let i = 1; i < entry.posts.length; i++) {
+            const other = entry.posts[i];
+            const otherAvg = other.stats.averageRating > 0 ? other.stats.averageRating.toFixed(2) : 'N/A';
+            const otherCount = other.stats.totalRatings;
+            resultLines.push(`↳ ⭐ ${otherAvg} avg (${otherCount} rating${otherCount !== 1 ? 's' : ''})`);
+            resultLines.push(`↳ ${other.post.link}`);
+          }
         }
         resultLines.push('');
       }
 
       resultLines.push('Thank you all for your contributions ✨');
+
+      // Export to Google Sheets if requested
+      const exportToSheets = interaction.options.getBoolean('export', false);
+      if (exportToSheets) {
+        try {
+          const { createResultsSheet } = await import('./services/GoogleSheetsService');
+          // Build SheetData from authorEntries grouped by bucket
+          const sheetGroups = new Map<number, { username: string; link: string; averageRating: number; totalRatings: number }[][]>();
+          for (const bucket of sortedBuckets) {
+            const sheetEntries = await Promise.all(
+              groups.get(bucket)!.map(async entry => {
+                const username = await getUserDisplay(entry.authorId);
+                return entry.posts.map(p => ({
+                  username,
+                  link: p.post.link,
+                  averageRating: p.stats.averageRating,
+                  totalRatings: p.stats.totalRatings,
+                }));
+              })
+            );
+            sheetGroups.set(bucket, sheetEntries);
+          }
+          const sheetUrl = await createResultsSheet({ title, groups: sheetGroups });
+          await interaction.followUp({ content: `📊 Google Sheet created: ${sheetUrl}`, ephemeral: false });
+        } catch (err) {
+          console.error('Failed to create Google Sheet:', err);
+          await interaction.followUp({ content: '❌ Failed to create Google Sheet. Check logs.', ephemeral: true });
+        }
+      }
 
       // Split results into multiple messages to stay within Discord's 6000 char embed limit
       const allEmbeds: EmbedBuilder[] = [];

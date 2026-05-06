@@ -163,6 +163,10 @@ export const commands = [
     .addStringOption(option =>
       option.setName('week_id')
         .setDescription('Week ID for closed weeks (visible in mod log)')
+        .setRequired(false))
+    .addBooleanOption(option =>
+      option.setName('export')
+        .setDescription('Export results to Google Sheets')
         .setRequired(false)),
 
   new SlashCommandBuilder()

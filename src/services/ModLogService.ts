@@ -147,7 +147,7 @@ export class ModLogService {
         embed.addFields({ name: 'Link', value: data.postLink });
         try {
           const og = await fetchOgData(data.postLink);
-          if (og.title) embed.addFields({ name: 'Tweet', value: og.title + (og.description ? `\n${og.description}` : '') });
+          if (og.title) embed.addFields({ name: 'Tweet', value: og.title });
           if (og.image) embed.setImage(og.image);
         } catch (ogError) {
           console.error('Failed to fetch OG data for flagged embed:', ogError);

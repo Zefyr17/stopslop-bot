@@ -166,7 +166,7 @@ export const commands = [
         .setRequired(false))
     .addBooleanOption(option =>
       option.setName('export')
-        .setDescription('Export results to Google Sheets')
+        .setDescription('Export results to CSV file')
         .setRequired(false)),
 
   new SlashCommandBuilder()

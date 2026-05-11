@@ -1468,32 +1468,46 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       resultLines.push('Thank you all for your contributions ✨');
 
-      // Export to Google Sheets if requested
-      const exportToSheets = interaction.options.getBoolean('export', false);
-      if (exportToSheets) {
+      // Export to CSV if requested
+      const exportToCSV = interaction.options.getBoolean('export', false);
+      if (exportToCSV) {
         try {
-          const { createResultsSheet } = await import('./services/GoogleSheetsService');
-          // Build SheetData from authorEntries grouped by bucket
-          const sheetGroups = new Map<number, { username: string; link: string; averageRating: number; totalRatings: number }[][]>();
+          const bucketToXP: Record<number, number> = { 9: 2500, 8: 2000, 7: 1500, 6: 1000, 5: 500 };
+
+          const csvRows: string[] = [];
+          csvRows.push(`"${title.replace(/"/g, '""')}"`);
+          csvRows.push('');
+          csvRows.push('"Discord Username & Post","XP Amount"');
+
           for (const bucket of sortedBuckets) {
-            const sheetEntries = await Promise.all(
-              groups.get(bucket)!.map(async entry => {
-                const username = await getUserDisplay(entry.authorId);
-                return entry.posts.map(p => ({
-                  username,
-                  link: p.post.link,
-                  averageRating: p.stats.averageRating,
-                  totalRatings: p.stats.totalRatings,
-                }));
-              })
-            );
-            sheetGroups.set(bucket, sheetEntries);
+            // Skip bucket 10 (top 5, handled separately) and anything below 5
+            if (bucket === 10 || bucket < 5) continue;
+            const xp = bucketToXP[bucket];
+            if (xp === undefined) continue;
+
+            csvRows.push(`"${bucket} points",""`);
+            for (const entry of groups.get(bucket)!) {
+              const username = await getUserDisplay(entry.authorId);
+              const best = entry.posts[0];
+              csvRows.push(`"${username} ${best.post.link.replace(/"/g, '""')}",${xp}`);
+              for (let i = 1; i < entry.posts.length; i++) {
+                const other = entry.posts[i];
+                const otherBucket = Math.floor(other.stats.averageRating);
+                const otherXp = bucketToXP[otherBucket];
+                if (otherXp === undefined) continue;
+                csvRows.push(`"  ↳ ${username} ${other.post.link.replace(/"/g, '""')}",${otherXp}`);
+              }
+            }
+            csvRows.push('"",""');
           }
-          const sheetUrl = await createResultsSheet({ title, groups: sheetGroups });
-          await interaction.followUp({ content: `📊 Google Sheet created: ${sheetUrl}`, ephemeral: false });
+
+          const csvContent = csvRows.join('\n');
+          const csvBuffer = Buffer.from('﻿' + csvContent, 'utf-8');
+          const attachment = new AttachmentBuilder(csvBuffer, { name: `results-${Date.now()}.csv` });
+          await interaction.followUp({ content: `📊 Results exported to CSV!`, files: [attachment], ephemeral: false });
         } catch (err) {
-          console.error('Failed to create Google Sheet:', err);
-          await interaction.followUp({ content: '❌ Failed to create Google Sheet. Check logs.', ephemeral: true });
+          console.error('Failed to create CSV export:', err);
+          await interaction.followUp({ content: '❌ Failed to export CSV. Check logs.', ephemeral: true });
         }
       }
 
@@ -2343,7 +2357,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const totalCount = filteredPosts.length;
 
         // Get all votes for this week's posts
-        const allVoterIds = new Set<string>();
         const votersThisWeek = new Set<string>();
 
         for (const post of filteredPosts) {
@@ -2479,63 +2492,25 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           });
         }
 
-        // Add ranking statistics (who rated shortlisted posts)
-        if (shortlistedCount > 0 && roleIdsToCheck.length > 0) {
-          const ratersThisWeek = new Set<string>();
-          const shortlistedPosts = filteredPosts.filter(p => p.status === PostStatus.SHORTLISTED);
+        // Penalty slot distribution (only when voter roles configured and channel specified)
+        if (roleIdsToCheck.length > 0 && monitoredChannel && eligibleVoters.length > 0) {
+          const slotCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+          await Promise.all(eligibleVoters.map(async (userId) => {
+            const limit = await spamPenaltyService.getPostLimit(userId, guildId, monitoredChannel.id, config!.defaultPostLimit);
+            const slot = Math.min(4, Math.max(0, limit));
+            slotCounts[slot] = (slotCounts[slot] ?? 0) + 1;
+          }));
 
-          for (const post of shortlistedPosts) {
-            const ratings = await prisma.rating.findMany({
-              where: { postId: post.id },
-              include: { user: true }
-            });
-            for (const rating of ratings) {
-              ratersThisWeek.add(rating.user.discordId);
-            }
-          }
+          const slotLines = Object.entries(slotCounts)
+            .filter(([, count]) => count > 0)
+            .map(([slot, count]) => `**${slot} slot${Number(slot) !== 1 ? 's' : ''}**: ${count} user${count !== 1 ? 's' : ''}`)
+            .join('\n');
 
-          const eligibleWhoRated = eligibleVoters.filter(id => ratersThisWeek.has(id));
-          const nonRaters = eligibleVoters.filter(id => !ratersThisWeek.has(id));
-
-          if (eligibleWhoRated.length > 0) {
-            const ratersList = eligibleWhoRated
-              .slice(0, 25)
-              .map(id => `<@${id}>`)
-              .join(', ');
-
-            const more = eligibleWhoRated.length > 25 ? `\n... and ${eligibleWhoRated.length - 25} more` : '';
-
+          if (slotLines) {
             embed.addFields({
-              name: `Ranked Posts (${eligibleWhoRated.length})`,
-              value: ratersList + more,
-              inline: false
-            });
-          } else {
-            embed.addFields({
-              name: 'Ranked Posts (0)',
-              value: 'No one yet',
-              inline: false
-            });
-          }
-
-          if (nonRaters.length > 0) {
-            const nonRatersList = nonRaters
-              .slice(0, 25)
-              .map(id => `<@${id}>`)
-              .join(', ');
-
-            const more = nonRaters.length > 25 ? `\n... and ${nonRaters.length - 25} more` : '';
-
-            embed.addFields({
-              name: `Not Ranked Yet (${nonRaters.length})`,
-              value: nonRatersList + more,
-              inline: false
-            });
-          } else {
-            embed.addFields({
-              name: 'Not Ranked Yet (0)',
-              value: 'Everyone ranked!',
-              inline: false
+              name: 'Post Slot Distribution',
+              value: slotLines,
+              inline: false,
             });
           }
         }

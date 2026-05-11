@@ -344,8 +344,8 @@ bot.on(Events.MessageCreate, async (message) => {
       try {
         let replyText: string;
         if (postLimitCheck.limit === 0) {
-          const ticketMention = config.ticketChannelId ? ` Open a ticket in <#${config.ticketChannelId}> to get feedback on your content.` : ' Please contact an admin to get feedback on your content.';
-          replyText = `<@${message.author.id}> Your post limit has been set to 0 due to low-quality content in the previous week.${ticketMention}`;
+          const ticketMention = config.ticketChannelId ? ` Open a support ticket in <#${config.ticketChannelId}> if you'd like feedback.` : ` Open a support ticket if you'd like feedback.`;
+          replyText = `<@${message.author.id}> Your submission slot limit is currently 0 based on recent post review results.${ticketMention}`;
         } else {
           replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
           if (postLimitCheck.penaltyBalance > 0) {
@@ -2492,26 +2492,29 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           });
         }
 
-        // Penalty slot distribution (only when voter roles configured and channel specified)
-        if (roleIdsToCheck.length > 0 && monitoredChannel && eligibleVoters.length > 0) {
-          const slotCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-          await Promise.all(eligibleVoters.map(async (userId) => {
-            const limit = await spamPenaltyService.getPostLimit(userId, guildId, monitoredChannel.id, config!.defaultPostLimit);
-            const slot = Math.min(4, Math.max(0, limit));
-            slotCounts[slot] = (slotCounts[slot] ?? 0) + 1;
-          }));
+        // Penalty slot distribution — based on post authors, not voters
+        if (monitoredChannel) {
+          const authorIds = [...new Set(filteredPosts.map(p => p.authorId))];
+          if (authorIds.length > 0) {
+            const slotCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+            const limitsMap = await spamPenaltyService.getBulkPostLimits(authorIds, guildId, monitoredChannel.id, config!.defaultPostLimit);
+            for (const limit of limitsMap.values()) {
+              const slot = Math.min(4, Math.max(0, limit));
+              slotCounts[slot] = (slotCounts[slot] ?? 0) + 1;
+            }
 
-          const slotLines = Object.entries(slotCounts)
-            .filter(([, count]) => count > 0)
-            .map(([slot, count]) => `**${slot} slot${Number(slot) !== 1 ? 's' : ''}**: ${count} user${count !== 1 ? 's' : ''}`)
-            .join('\n');
+            const slotLines = Object.entries(slotCounts)
+              .filter(([, count]) => count > 0)
+              .map(([slot, count]) => `**${slot} slot${Number(slot) !== 1 ? 's' : ''}**: ${count} user${count !== 1 ? 's' : ''}`)
+              .join('\n');
 
-          if (slotLines) {
-            embed.addFields({
-              name: 'Post Slot Distribution',
-              value: slotLines,
-              inline: false,
-            });
+            if (slotLines) {
+              embed.addFields({
+                name: 'Post Slot Distribution',
+                value: slotLines,
+                inline: false,
+              });
+            }
           }
         }
 

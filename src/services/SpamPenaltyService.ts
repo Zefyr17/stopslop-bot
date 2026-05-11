@@ -106,6 +106,62 @@ export class SpamPenaltyService {
   }
 
   /**
+   * Batch version of getPostLimit for multiple users at once.
+   * Makes 3 total queries regardless of user count.
+   */
+  async getBulkPostLimits(userIds: string[], guildId: string, monitoredChannelId: string, defaultLimit: number = DEFAULT_POST_LIMIT): Promise<Map<string, number>> {
+    const result = new Map<string, number>(userIds.map(id => [id, defaultLimit]));
+
+    const closedWeeks = await prisma.week.findMany({
+      where: { status: WeekStatus.CLOSED, monitoredChannelId },
+      orderBy: { endDate: 'asc' },
+      select: { id: true },
+    });
+
+    if (closedWeeks.length === 0) return result;
+
+    const weekIds = closedWeeks.map(w => w.id);
+
+    // Fetch all penalties for all users across all closed weeks in one query
+    const allPenalties = await prisma.spamPenalty.groupBy({
+      by: ['oderId', 'weekId'],
+      where: { oderId: { in: userIds }, guildId, weekId: { in: weekIds } },
+      _count: { id: true },
+    });
+
+    // Fetch all shortlisted posts for all users across all closed weeks in one query
+    const allShortlisted = await prisma.post.groupBy({
+      by: ['authorId', 'weekId'],
+      where: { authorId: { in: userIds }, monitoredChannelId, weekId: { in: weekIds }, status: PostStatus.SHORTLISTED },
+      _count: { id: true },
+    });
+
+    // Index by userId+weekId for O(1) lookup
+    const penaltyMap = new Map<string, number>();
+    for (const row of allPenalties) penaltyMap.set(`${row.oderId}:${row.weekId}`, row._count.id);
+
+    const shortlistedMap = new Map<string, number>();
+    for (const row of allShortlisted) shortlistedMap.set(`${row.authorId}:${row.weekId}`, row._count.id);
+
+    // Walk weeks in order for each user
+    for (const userId of userIds) {
+      let currentLimit = defaultLimit;
+      for (const week of closedWeeks) {
+        const penalties = penaltyMap.get(`${userId}:${week.id}`) ?? 0;
+        const shortlisted = shortlistedMap.get(`${userId}:${week.id}`) ?? 0;
+        if (penalties >= 3) {
+          currentLimit = 0;
+        } else {
+          currentLimit = Math.min(defaultLimit, Math.max(1, currentLimit - penalties + shortlisted));
+        }
+      }
+      result.set(userId, currentLimit);
+    }
+
+    return result;
+  }
+
+  /**
    * Get user's current post count for the active week of a specific channel.
    */
   async getUserPostCount(discordUserId: string, monitoredChannelId: string): Promise<number> {

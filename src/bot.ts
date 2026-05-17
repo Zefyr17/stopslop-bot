@@ -6,6 +6,7 @@ import { ratingService } from './services/RatingService';
 import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
 import { spamPenaltyService } from './services/SpamPenaltyService';
+import { spamCooldownService } from './services/SpamCooldownService';
 import { weightBoostService } from './services/WeightBoostService';
 import { raffleService } from './services/RaffleService';
 import { extractFirstLink } from './utils/linkDetector';
@@ -657,9 +658,9 @@ async function handleVoteButton(interaction: ButtonInteraction, guildId: string)
               const rejectRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder().setCustomId(`shortlist_reject_${post.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
               );
-              const shortlistNumber = await prisma.post.count({
-                where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
-              });
+              const maxPos = await prisma.$queryRaw<{ max: number | null }[]>`SELECT MAX("shortlistPosition") as max FROM "Post" WHERE "weekId" = ${post.weekId}`;
+              const shortlistNumber = (maxPos[0]?.max ?? 0) + 1;
+              await prisma.$executeRaw`UPDATE "Post" SET "shortlistPosition" = ${shortlistNumber} WHERE id = ${post.id}`;
               await (shortlistChannel as TextChannel).send({
                 content: `⭐ **${shortlistNumber}. Shortlisted Content** by <@${post.authorId}>\n👍 ${weightedVoteCounts.weightedUpvotes} | 👎 ${weightedVoteCounts.weightedDownvotes}\n\n${post.link}`,
                 components: [rateRow1, rateRow2, rejectRow],
@@ -737,11 +738,11 @@ async function handleFlagApproveButton(interaction: ButtonInteraction, guildId: 
           const rejectRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId(`shortlist_reject_${post.id}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
           );
-          const shortlistNumber = await prisma.post.count({
-            where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
-          });
+          const maxPos2 = await prisma.$queryRaw<{ max: number | null }[]>`SELECT MAX("shortlistPosition") as max FROM "Post" WHERE "weekId" = ${post.weekId}`;
+          const shortlistNumber2 = (maxPos2[0]?.max ?? 0) + 1;
+          await prisma.$executeRaw`UPDATE "Post" SET "shortlistPosition" = ${shortlistNumber2} WHERE id = ${post.id}`;
           await (shortlistChannel as TextChannel).send({
-            content: `⭐ **${shortlistNumber}. Shortlisted Content** by <@${post.authorId}>\n\n${post.link}`,
+            content: `⭐ **${shortlistNumber2}. Shortlisted Content** by <@${post.authorId}>\n\n${post.link}`,
             components: [rateRow1, rateRow2, rejectRow],
           });
         }
@@ -1690,9 +1691,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
                 new ButtonBuilder().setCustomId(`shortlist_reject_${postId}`).setLabel('❌ Reject').setStyle(ButtonStyle.Danger)
               );
 
-              const shortlistNumber = await prisma.post.count({
-                where: { weekId: post.weekId, status: PostStatus.SHORTLISTED },
-              });
+              const maxPos3 = await prisma.$queryRaw<{ max: number | null }[]>`SELECT MAX("shortlistPosition") as max FROM "Post" WHERE "weekId" = ${post.weekId}`;
+              const shortlistNumber = (maxPos3[0]?.max ?? 0) + 1;
+              await prisma.$executeRaw`UPDATE "Post" SET "shortlistPosition" = ${shortlistNumber} WHERE id = ${postId}`;
               await shortlistChannel.send({
                 content: `⭐ **${shortlistNumber}. Shortlisted Content (Admin Override)** by <@${post.authorId}>\n👍 ${voteCounts.upvotes} | 👎 ${voteCounts.downvotes}\n\n${post.link}`,
                 components: [rateRow1, rateRow2, rejectRow]
@@ -2492,12 +2493,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           });
         }
 
-        // Penalty slot distribution — based on post authors, not voters
+        // Penalty slot distribution — based on eligible voters (includes those with 0 posts)
         if (monitoredChannel) {
           const authorIds = [...new Set(filteredPosts.map(p => p.authorId))];
-          if (authorIds.length > 0) {
+          // Use eligible voters as base if roles configured, otherwise fall back to post authors only
+          const slotUserIds = eligibleVoters.length > 0
+            ? [...new Set([...eligibleVoters, ...authorIds])]
+            : authorIds;
+
+          if (slotUserIds.length > 0) {
             const slotCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-            const limitsMap = await spamPenaltyService.getBulkPostLimits(authorIds, guildId, monitoredChannel.id, config!.defaultPostLimit);
+            const limitsMap = await spamPenaltyService.getBulkPostLimits(slotUserIds, guildId, monitoredChannel.id, config!.defaultPostLimit);
             for (const limit of limitsMap.values()) {
               const slot = Math.min(4, Math.max(0, limit));
               slotCounts[slot] = (slotCounts[slot] ?? 0) + 1;
@@ -2673,6 +2679,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**)`;
             }
 
+            const cooldown = await spamCooldownService.getActiveCooldown(targetUser.id, guildId, channelId);
+            if (cooldown) {
+              const expiresStr = `<t:${Math.floor(cooldown.expiresAt.getTime() / 1000)}:D>`;
+              channelStatus += `\n🔒 Cooldown active — grant-slot blocked until ${expiresStr}`;
+            }
+
             // Next week forecast — based on current limit + this week's active changes
             const nextWeekLimit = Math.min(defaultLimit, Math.max(1, postLimitCheck.limit - currentWeekStats.penalties + currentWeekStats.shortlisted));
             const limitDelta = nextWeekLimit - postLimitCheck.limit;
@@ -2740,6 +2752,18 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         const targetUser = interaction.options.getUser('user', true);
         const grantChannel = interaction.options.getChannel('channel', false);
         try {
+          if (grantChannel) {
+            const cooldown = await spamCooldownService.getActiveCooldown(targetUser.id, guildId, grantChannel.id);
+            if (cooldown) {
+              const expiresStr = `<t:${Math.floor(cooldown.expiresAt.getTime() / 1000)}:D>`;
+              await interaction.reply({
+                content: `🔒 <@${targetUser.id}> is on cooldown for <#${grantChannel.id}> until ${expiresStr}. Use \`/spam cooldown-lift\` to remove it first.`,
+                ephemeral: true,
+              });
+              return;
+            }
+          }
+
           const removed = await spamPenaltyService.removeOnePenalty(targetUser.id, guildId, grantChannel?.id);
           if (!removed) {
             await interaction.reply({
@@ -3024,6 +3048,49 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         } catch (error) {
           console.error('Error in spam add-penalty:', error);
           await interaction.reply({ content: '❌ Failed to add penalty.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'cooldown') {
+        const targetUser = interaction.options.getUser('user', true);
+        const channel = interaction.options.getChannel('channel', true);
+        const days = interaction.options.getInteger('days', false) ?? 14;
+        try {
+          const { expiresAt } = await spamCooldownService.setCooldown(
+            targetUser.id, guildId, channel.id, interaction.user.id, days,
+          );
+          const expiresStr = `<t:${Math.floor(expiresAt.getTime() / 1000)}:D>`;
+          await interaction.reply({
+            content: `🔒 Cooldown set for <@${targetUser.id}> in <#${channel.id}> for **${days} day${days !== 1 ? 's' : ''}** (until ${expiresStr}).\n/spam grant-slot is now blocked for this user in that channel.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam cooldown:', error);
+          await interaction.reply({ content: '❌ Failed to set cooldown.', ephemeral: true });
+        }
+        return;
+      }
+
+      if (subcommand === 'cooldown-lift') {
+        const targetUser = interaction.options.getUser('user', true);
+        const channel = interaction.options.getChannel('channel', true);
+        try {
+          const lifted = await spamCooldownService.liftCooldown(targetUser.id, guildId, channel.id);
+          if (!lifted) {
+            await interaction.reply({
+              content: `ℹ️ <@${targetUser.id}> has no active cooldown for <#${channel.id}>.`,
+              ephemeral: true,
+            });
+            return;
+          }
+          await interaction.reply({
+            content: `✅ Cooldown lifted for <@${targetUser.id}> in <#${channel.id}>. You can now use /spam grant-slot.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error('Error in spam cooldown-lift:', error);
+          await interaction.reply({ content: '❌ Failed to lift cooldown.', ephemeral: true });
         }
         return;
       }

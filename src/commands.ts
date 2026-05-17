@@ -360,6 +360,36 @@ export const commands = [
         .addChannelOption(option =>
           option.setName('channel')
             .setDescription('Channel to apply the penalty to')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('cooldown')
+        .setDescription('Place a cooldown on a user — blocks /spam grant-slot until it expires (Admin only)')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to place on cooldown')
+            .setRequired(true))
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel to apply cooldown to')
+            .setRequired(true))
+        .addIntegerOption(option =>
+          option.setName('days')
+            .setDescription('Cooldown duration in days (default: 14)')
+            .setMinValue(1)
+            .setMaxValue(90)
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('cooldown-lift')
+        .setDescription('Remove an active cooldown from a user early (Admin only)')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to lift cooldown from')
+            .setRequired(true))
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel to lift cooldown from')
             .setRequired(true))),
 
   new SlashCommandBuilder()

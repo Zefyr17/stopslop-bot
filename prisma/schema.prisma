@@ -64,6 +64,7 @@ model Post {
   originalMessage    String?
   reviewMessageId    String?
   flaggedMessageId   String?
+  shortlistPosition  Int?
   week               Week       @relation(fields: [weekId], references: [id])
   votes              Vote[]
   ratings            Rating[]
@@ -203,4 +204,18 @@ model SpamPenalty {
   weekId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Cooldown placed by admin on a user who abused the grant-slot system
+model SpamCooldown {
+  id                 String   @id @default(cuid())
+  oderId             String
+  guildId            String
+  monitoredChannelId String
+  expiresAt          DateTime
+  grantedBy          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([oderId, guildId, monitoredChannelId])
 }

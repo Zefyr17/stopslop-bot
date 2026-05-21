@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 
-const DEFAULT_COOLDOWN_DAYS = 14;
+const DEFAULT_COOLDOWN_DAYS = 7;
 
 export class SpamCooldownService {
   async setCooldown(

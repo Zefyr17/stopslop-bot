@@ -1453,15 +1453,15 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const best = entry.posts[0];
           const bestAvg = best.stats.averageRating > 0 ? best.stats.averageRating.toFixed(2) : 'N/A';
           const bestCount = best.stats.totalRatings;
-          resultLines.push(`${username} • ⭐ ${bestAvg} avg (${bestCount} rating${bestCount !== 1 ? 's' : ''})`);
-          resultLines.push(best.post.link);
+          resultLines.push(`⭐ ${bestAvg} avg (${bestCount} rating${bestCount !== 1 ? 's' : ''})`);
+          resultLines.push(`${username}  ${best.post.link}`);
           // Additional posts as sub-entries
           for (let i = 1; i < entry.posts.length; i++) {
             const other = entry.posts[i];
             const otherAvg = other.stats.averageRating > 0 ? other.stats.averageRating.toFixed(2) : 'N/A';
             const otherCount = other.stats.totalRatings;
-            resultLines.push(`↳ ⭐ ${otherAvg} avg (${otherCount} rating${otherCount !== 1 ? 's' : ''})`);
-            resultLines.push(`↳ ${other.post.link}`);
+            resultLines.push(`⭐ ${otherAvg} avg (${otherCount} rating${otherCount !== 1 ? 's' : ''})`);
+            resultLines.push(`${username}  ${other.post.link}`);
           }
         }
         resultLines.push('');
@@ -1854,6 +1854,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           const channelInfo = ` for <#${monitoredChannelId}>`;
           const channelInfoLog = ` for channel <#${monitoredChannelId}>`;
+
+          // Apply 2-week cooldowns for users who just hit tier=0
+          const config = await guildConfigService.getConfig(guildId);
+          await spamPenaltyService.applyWeekCloseCooldowns(guildId, monitoredChannelId, config?.defaultPostLimit);
 
           // Log to mod_log
           await modLogService.log(guildId, ModLogEventType.WEEK_CLOSED, {
@@ -2652,12 +2656,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               orderBy: { createdAt: 'asc' },
             }) : [];
 
-            // Build limit formula string
-            const { totalPenalties, totalShortlisted, closedWeeksCount } = postLimitCheck;
+            // Build status string
             const defaultLimit = config.defaultPostLimit;
-            let channelStatus = `Posts: **${postLimitCheck.currentCount}/${postLimitCheck.limit}**`;
+            const { limit, totalPenalties, totalShortlisted, closedWeeksCount } = postLimitCheck;
+            let channelStatus = `Posts: **${postLimitCheck.currentCount}/${limit}**`;
 
-            // Show limit breakdown based on last closed week only
             if (closedWeeksCount > 0) {
               const netEffect = totalShortlisted - totalPenalties;
               const netStr = netEffect >= 0 ? `+${netEffect}` : `${netEffect}`;
@@ -2666,17 +2669,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
             // Current active week stats
             if (currentWeekStats.penalties > 0) {
-              channelStatus += `\nThis week: **${currentWeekStats.penalties}** ❌ new penalties (will apply next week)`;
+              channelStatus += `\nThis week: **${currentWeekStats.penalties}** ❌ rejected with 0 YES (will apply next week)`;
             }
             if (currentWeekStats.shortlisted > 0) {
               channelStatus += `\nThis week: **${currentWeekStats.shortlisted}** ✅ shortlisted (will recover next week)`;
             }
 
-            const remainingPosts = postLimitCheck.limit - postLimitCheck.currentCount;
+            const remainingPosts = limit - postLimitCheck.currentCount;
             if (remainingPosts > 0) {
               channelStatus += `\n🟢 Can post: **${remainingPosts}** slot${remainingPosts > 1 ? 's' : ''} remaining`;
             } else {
-              channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**)`;
+              channelStatus += `\n🔴 Cannot post: limit reached (**${postLimitCheck.currentCount}/${limit}**)`;
             }
 
             const cooldown = await spamCooldownService.getActiveCooldown(targetUser.id, guildId, channelId);
@@ -2685,25 +2688,18 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               channelStatus += `\n🔒 Cooldown active — grant-slot blocked until ${expiresStr}`;
             }
 
-            // Next week forecast — based on current limit + this week's active changes
-            const nextWeekLimit = Math.min(defaultLimit, Math.max(1, postLimitCheck.limit - currentWeekStats.penalties + currentWeekStats.shortlisted));
-            const limitDelta = nextWeekLimit - postLimitCheck.limit;
-
+            // Next week forecast
+            const nextWeekLimit = Math.min(defaultLimit, Math.max(0, limit - currentWeekStats.penalties + currentWeekStats.shortlisted));
+            const limitDelta = nextWeekLimit - limit;
             let forecast = '';
-            if (currentWeekStats.penalties === 0 && currentWeekStats.shortlisted === 0) {
-              forecast = `Next week: **${nextWeekLimit}** posts (no changes this week — limit carries over)`;
+            if (limit === 0) {
+              forecast = `Next week: **${defaultLimit}** slots — auto-reset after 0-slot week`;
             } else if (limitDelta > 0) {
-              forecast = `Next week: limit increases to **${nextWeekLimit}** (+${limitDelta}) — ${currentWeekStats.shortlisted > 0 ? `${currentWeekStats.shortlisted} shortlisted this week will recover slots` : 'past shortlisted outweigh penalties'}`;
+              forecast = `Next week: **${nextWeekLimit}** slots (+${limitDelta}) — ${currentWeekStats.shortlisted} shortlisted this week`;
             } else if (limitDelta < 0) {
-              forecast = `Next week: limit decreases to **${nextWeekLimit}** (${limitDelta}) — ${currentWeekStats.penalties > 0 ? `${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} this week will apply` : 'accumulated penalties exceed shortlisted posts'}`;
+              forecast = `Next week: **${nextWeekLimit}** slot${nextWeekLimit !== 1 ? 's' : ''} (${limitDelta}) — ${currentWeekStats.penalties} bad post${currentWeekStats.penalties !== 1 ? 's' : ''} this week`;
             } else {
-              if (currentWeekStats.penalties > 0 && currentWeekStats.shortlisted > 0) {
-                forecast = `Next week: limit stays at **${nextWeekLimit}** — ${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} and ${currentWeekStats.shortlisted} shortlisted this week cancel each other out`;
-              } else if (currentWeekStats.penalties > 0) {
-                forecast = `Next week: limit stays at **${nextWeekLimit}** — ${currentWeekStats.penalties} new penalt${currentWeekStats.penalties > 1 ? 'ies' : 'y'} this week, but already at minimum (1)`;
-              } else {
-                forecast = `Next week: limit stays at **${nextWeekLimit}** — already at maximum or no change`;
-              }
+              forecast = `Next week: **${nextWeekLimit}** slot${nextWeekLimit !== 1 ? 's' : ''} — no change this week`;
             }
             channelStatus += `\n📊 ${forecast}`;
 

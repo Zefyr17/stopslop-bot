@@ -345,12 +345,12 @@ bot.on(Events.MessageCreate, async (message) => {
       try {
         let replyText: string;
         if (postLimitCheck.limit === 0) {
-          const ticketMention = config.ticketChannelId ? ` Open a support ticket in <#${config.ticketChannelId}> if you'd like feedback.` : ` Open a support ticket if you'd like feedback.`;
-          replyText = `<@${message.author.id}> Your submission slot limit is currently 0 based on recent post review results.${ticketMention}`;
+          const ticketMention = config.ticketChannelId ? ` Open a ticket in <#${config.ticketChannelId}> if you have questions.` : '';
+          replyText = `<@${message.author.id}> You have 0 post slots this week because your recent submissions did not meet the current shortlisting criteria. You have a **1-week cooldown** — once it expires your slots will reset to full.${ticketMention}`;
         } else {
           replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
           if (postLimitCheck.penaltyBalance > 0) {
-            replyText += ` Your limit is reduced due to past penalties — get your posts shortlisted to recover +1 slot per shortlist.`;
+            replyText += ` Your limit is reduced because your recent submissions did not meet the current shortlisting criteria. Get a post shortlisted to recover +1 slot.`;
           }
         }
         const replyMsg = await message.reply({ content: replyText, allowedMentions: { repliedUser: false } });

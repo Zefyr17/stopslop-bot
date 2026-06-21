@@ -899,11 +899,6 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
-    // Check if ranking is open
-    if (week && !week.rankingOpen) {
-      await interaction.followUp({ content: 'Admin has not started ranking session yet.', ephemeral: true });
-      return;
-    }
 
     if (post.status !== PostStatus.SHORTLISTED) {
       await interaction.followUp({ content: 'Only shortlisted posts can be rated.', ephemeral: true });
@@ -1921,48 +1916,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: errorMessage,
           });
           await interaction.reply({ content: `❌ Failed to start voting period: ${errorMessage}`, ephemeral: true });
-        }
-        return;
-      }
-    }
-
-    if (commandName === 'ranking') {
-      const subcommand = interaction.options.getSubcommand();
-
-      if (subcommand === 'start') {
-        try {
-          // Get optional monitored channel parameter
-          const monitoredChannel = interaction.options.getChannel('monitored', false);
-          const monitoredChannelId = monitoredChannel?.id;
-
-          // Get active week for this channel (or global if no channel specified)
-          const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
-          if (!activeWeek) {
-            await interaction.reply({ content: 'No active voting period found. Use /week start first.', ephemeral: true });
-            return;
-          }
-
-          if (activeWeek.rankingOpen) {
-            const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
-            await interaction.reply({ content: `Ranking is already open${channelInfo}.`, ephemeral: true });
-            return;
-          }
-
-          // Open ranking
-          const updatedWeek = await prisma.week.update({
-            where: { id: activeWeek.id },
-            data: { rankingOpen: true },
-          });
-
-          const channelInfo = monitoredChannel ? ` for <#${monitoredChannel.id}>` : '';
-
-          await interaction.reply({
-            content: `✅ **Ranking session opened!**${channelInfo}\n\nJudges can now rate shortlisted content.`,
-            ephemeral: true,
-          });
-        } catch (error) {
-          console.error('Error opening ranking:', error);
-          await interaction.reply({ content: '❌ Failed to open ranking session.', ephemeral: true });
         }
         return;
       }

@@ -7,6 +7,7 @@ import { modLogService, ModLogEventType } from './services/ModLogService';
 import { weekService } from './services/WeekService';
 import { spamPenaltyService } from './services/SpamPenaltyService';
 import { spamCooldownService } from './services/SpamCooldownService';
+import { slotGrantService } from './services/SlotGrantService';
 import { weightBoostService } from './services/WeightBoostService';
 import { raffleService } from './services/RaffleService';
 import { extractFirstLink } from './utils/linkDetector';
@@ -2714,9 +2715,38 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           }
 
           const removed = await spamPenaltyService.removeOnePenalty(targetUser.id, guildId, grantChannel?.id);
+
           if (!removed) {
+            // No penalty to remove — grant a direct slot bonus for the active week instead
+            if (!grantChannel) {
+              await interaction.reply({
+                content: `❌ Please specify a channel to grant a slot when the user has no penalties.`,
+                ephemeral: true,
+              });
+              return;
+            }
+            const activeWeek = await prisma.week.findFirst({
+              where: { status: 'ACTIVE', monitoredChannelId: grantChannel.id },
+              orderBy: { createdAt: 'desc' },
+              select: { id: true },
+            });
+            if (!activeWeek) {
+              await interaction.reply({
+                content: `❌ No active week found for <#${grantChannel.id}>.`,
+                ephemeral: true,
+              });
+              return;
+            }
+            await slotGrantService.grantSlot(targetUser.id, guildId, grantChannel.id, activeWeek.id, interaction.user.id);
+
+            await modLogService.log(guildId, ModLogEventType.SPAM_PENALTY_RESET, {
+              oderId: targetUser.id,
+              adminId: interaction.user.id,
+              details: `+1 bonus slot granted to ${targetUser.username} (<@${targetUser.id}>) in <#${grantChannel.id}> by ${interaction.user.username} (<@${interaction.user.id}>) (no penalty — direct grant)`,
+            });
+
             await interaction.reply({
-              content: `ℹ️ <@${targetUser.id}> has no penalties${grantChannel ? ` for <#${grantChannel.id}>` : ''} — they already have the full post limit.`,
+              content: `✅ Granted +1 bonus slot to <@${targetUser.id}> in <#${grantChannel.id}> for this week (no penalty removed — direct grant).`,
               ephemeral: true,
             });
             return;

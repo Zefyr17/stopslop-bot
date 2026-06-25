@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import { PostStatus, WeekStatus } from '@prisma/client';
 import { spamCooldownService } from './SpamCooldownService';
+import { slotGrantService } from './SlotGrantService';
 
 const DEFAULT_POST_LIMIT = 3;
 
@@ -166,10 +167,21 @@ export class SpamPenaltyService {
     const details = await this.getPostLimitDetails(discordUserId, guildId, monitoredChannelId, defaultLimit);
     const currentCount = await this.getUserPostCount(discordUserId, monitoredChannelId);
 
+    // Add bonus slots from admin grants for the active week
+    const activeWeek = await prisma.week.findFirst({
+      where: { status: WeekStatus.ACTIVE, monitoredChannelId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    const grants = activeWeek
+      ? await slotGrantService.getGrantCount(discordUserId, guildId, monitoredChannelId, activeWeek.id)
+      : 0;
+    const effectiveLimit = details.limit + grants;
+
     return {
-      canPost: currentCount < details.limit,
+      canPost: currentCount < effectiveLimit,
       currentCount,
-      limit: details.limit,
+      limit: effectiveLimit,
       penaltyBalance: defaultLimit - details.limit,
       totalPenalties: details.lastWeekPenalties,
       totalShortlisted: details.lastWeekShortlisted,

@@ -206,6 +206,18 @@ model SpamPenalty {
   updatedAt DateTime @updatedAt
 }
 
+// Admin-granted bonus slots for a user in a specific week
+model SlotGrant {
+  id                 String   @id @default(cuid())
+  oderId             String
+  guildId            String
+  monitoredChannelId String
+  weekId             String
+  grantedBy          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 // Cooldown placed by admin on a user who abused the grant-slot system
 model SpamCooldown {
   id                 String   @id @default(cuid())

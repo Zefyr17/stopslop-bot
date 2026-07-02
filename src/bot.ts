@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder, TextChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction, type ModalSubmitInteraction, type ChatInputCommandInteraction, ChannelType, AttachmentBuilder, TextChannel } from 'discord.js';
 import { guildConfigService } from './services/GuildConfigService';
 import { postService } from './services/PostService';
 import { voteService } from './services/VoteService';
@@ -474,6 +474,11 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    if (customId.startsWith('flag_rank_')) {
+      await handleFlagRankButton(interaction, guildId);
+      return;
+    }
+
     if (customId.startsWith('flag_reject_')) {
       await handleFlagRejectButton(interaction, guildId);
       return;
@@ -483,7 +488,16 @@ bot.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-  await handleVoteButton(interaction, guildId);
+    await handleVoteButton(interaction, guildId);
+    return;
+  }
+
+  if (interaction.isModalSubmit()) {
+    const customId = interaction.customId;
+    if (customId.startsWith('rank_modal_')) {
+      await handleRankModalSubmit(interaction, guildId);
+      return;
+    }
   }
 
 });
@@ -794,6 +808,11 @@ async function handleFlagRejectButton(interaction: ButtonInteraction, guildId: s
       return;
     }
 
+    if ((post.status as string) === 'RANKED') {
+      await interaction.reply({ content: '⚠️ This post has already been ranked and cannot be rejected.', ephemeral: true });
+      return;
+    }
+
     // Add spam penalty if low quality (0 upvotes at time of rejection)
     const weightedVotes = await voteService.getWeightedVoteCounts(postId, guildId);
     const config = await guildConfigService.getConfig(guildId);
@@ -847,6 +866,132 @@ async function handleFlagRejectButton(interaction: ButtonInteraction, guildId: s
     console.error('Error in flag reject button:', error);
     try {
       await interaction.reply({ content: '❌ Failed to reject post.', ephemeral: true });
+    } catch {}
+  }
+}
+
+async function handleFlagRankButton(interaction: ButtonInteraction, guildId: string) {
+  try {
+    const config = await guildConfigService.getConfig(guildId);
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    const hasJudgeRole = !config || config.judgeRoleIds.length === 0 ||
+      config.judgeRoleIds.some((roleId: string) => member.roles.cache.has(roleId));
+
+    if (!hasJudgeRole) {
+      await interaction.reply({ content: '❌ Only judges can rank posts.', ephemeral: true });
+      return;
+    }
+
+    const postId = interaction.customId.replace('flag_rank_', '');
+    const post = await postService.getPostById(postId);
+
+    if (!post) {
+      await interaction.reply({ content: '❌ Post not found.', ephemeral: true });
+      return;
+    }
+
+    const decidedStatuses = [PostStatus.SHORTLISTED, PostStatus.REJECTED, 'RANKED' as PostStatus];
+    if (decidedStatuses.includes(post.status)) {
+      await interaction.reply({ content: '⚠️ This post has already been decided.', ephemeral: true });
+      return;
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`rank_modal_${postId}`)
+      .setTitle('Rank this post');
+
+    const scoreInput = new TextInputBuilder()
+      .setCustomId('score')
+      .setLabel('Score (1-10)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter a number from 1 to 10')
+      .setRequired(true)
+      .setMinLength(1)
+      .setMaxLength(2);
+
+    const inputRow = new ActionRowBuilder<TextInputBuilder>().addComponents(scoreInput);
+    modal.addComponents(inputRow);
+
+    await interaction.showModal(modal);
+  } catch (error) {
+    console.error('Error in flag rank button:', error);
+    try {
+      await interaction.reply({ content: '❌ Failed to open rank modal.', ephemeral: true });
+    } catch {}
+  }
+}
+
+async function handleRankModalSubmit(interaction: ModalSubmitInteraction, guildId: string) {
+  try {
+    await interaction.deferReply({ ephemeral: true });
+
+    const postId = interaction.customId.replace('rank_modal_', '');
+    const rawScore = interaction.fields.getTextInputValue('score').trim();
+    const score = parseInt(rawScore, 10);
+
+    if (isNaN(score) || score < 1 || score > 10) {
+      await interaction.editReply({ content: '❌ Invalid score. Please enter a number from 1 to 10.' });
+      return;
+    }
+
+    const post = await postService.getPostById(postId);
+    if (!post) {
+      await interaction.editReply({ content: '❌ Post not found.' });
+      return;
+    }
+
+    const decidedStatuses2 = [PostStatus.SHORTLISTED, PostStatus.REJECTED, 'RANKED' as PostStatus];
+    if (decidedStatuses2.includes(post.status)) {
+      await interaction.editReply({ content: '⚠️ This post has already been decided.' });
+      return;
+    }
+
+    // Save the rating
+    await ratingService.upsertRating(postId, interaction.user.id, score);
+
+    // Set status to RANKED
+    await postService.updateStatus(postId, 'RANKED' as PostStatus);
+
+    // Disable buttons on the flag embed in mod log
+    try {
+      if (interaction.message) {
+        await interaction.message.edit({ components: [] });
+      }
+    } catch (err) {
+      console.error('Failed to disable buttons on flag embed:', err);
+    }
+
+    // Disable voting buttons on the original message in monitored channel
+    if (post.reviewMessageId && post.monitoredChannelId) {
+      try {
+        const channel = await interaction.guild!.channels.fetch(post.monitoredChannelId);
+        if (channel?.isTextBased()) {
+          const reviewMessage = await (channel as TextChannel).messages.fetch(post.reviewMessageId);
+          const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`upvote_${postId}`).setLabel('Yes').setStyle(ButtonStyle.Primary).setDisabled(true),
+            new ButtonBuilder().setCustomId(`downvote_${postId}`).setLabel('No').setStyle(ButtonStyle.Secondary).setDisabled(true)
+          );
+          await reviewMessage.edit({ components: [disabledRow] });
+        }
+      } catch (err) {
+        console.error('Failed to update review message:', err);
+      }
+    }
+
+    await modLogService.log(guildId, ModLogEventType.ADMIN_OVERRIDE_APPROVE, {
+      postId,
+      postLink: post.link,
+      authorId: post.authorId,
+      adminId: interaction.user.id,
+      oldStatus: post.status,
+      details: `Post ranked ${score}/10 by <@${interaction.user.id}>. Not sent to shortlist channel.`,
+    });
+
+    await interaction.editReply({ content: `✅ Post ranked **${score}/10**. Saved — not sent to shortlist channel.` });
+  } catch (error) {
+    console.error('Error in rank modal submit:', error);
+    try {
+      await interaction.editReply({ content: '❌ Failed to save rank.' });
     } catch {}
   }
 }
@@ -1347,10 +1492,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         }
       }
 
-      const shortlistedPosts = await postService.getPostsByStatus(PostStatus.SHORTLISTED);
+      const [shortlistedPosts, rankedPosts] = await Promise.all([
+        postService.getPostsByStatus(PostStatus.SHORTLISTED),
+        postService.getPostsByStatus('RANKED' as PostStatus),
+      ]);
 
       // Filter posts by week and channel
-      let weekPosts = shortlistedPosts.filter(p => {
+      const allPosts = [...shortlistedPosts, ...rankedPosts];
+      let weekPosts = allPosts.filter(p => {
         if (p.weekId !== targetWeek!.id) return false;
         if (monitoredChannel && p.monitoredChannelId !== monitoredChannel.id) return false;
         return true;
@@ -1833,12 +1982,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'close') {
         try {
+          await interaction.deferReply({ ephemeral: true });
+
           const monitoredChannel = interaction.options.getChannel('monitored', true);
           const monitoredChannelId = monitoredChannel.id;
 
           const activeWeek = await weekService.getActiveWeek(monitoredChannelId);
           if (!activeWeek) {
-            await interaction.reply({ content: `No active voting period to close for <#${monitoredChannelId}>.`, ephemeral: true });
+            await interaction.editReply({ content: `No active voting period to close for <#${monitoredChannelId}>.` });
             return;
           }
           const allPosts = await postService.getPostsByWeek(activeWeek.id);
@@ -1851,7 +2002,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const channelInfo = ` for <#${monitoredChannelId}>`;
           const channelInfoLog = ` for channel <#${monitoredChannelId}>`;
 
-          // Apply 2-week cooldowns for users who just hit tier=0
+          // Apply cooldowns for users who just hit limit=0
           const config = await guildConfigService.getConfig(guildId);
           await spamPenaltyService.applyWeekCloseCooldowns(guildId, monitoredChannelId, config?.defaultPostLimit);
 
@@ -1865,9 +2016,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: `Voting period closed${channelInfoLog} by <@${interaction.user.id}>. Bot will no longer accept posts until /week start is used.`,
           });
 
-          await interaction.reply({
+          await interaction.editReply({
             content: `✅ **Voting period closed successfully**${channelInfo}\n\n**Period:** ${startDate} to ${endDate}\n**Total Posts:** ${allPosts.length}\n\n🛑 **Bot will no longer accept new posts${channelInfo}.**\nUse \`/week start\` to begin a new voting period.`,
-            ephemeral: true,
           });
         } catch (error) {
           console.error('Error closing week:', error);
@@ -1875,7 +2025,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             error: 'Failed to close week',
             details: error instanceof Error ? error.message : 'Unknown error',
           });
-          await interaction.reply({ content: '❌ Failed to close week. Check mod log for details.', ephemeral: true });
+          try {
+            await interaction.editReply({ content: '❌ Failed to close week. Check mod log for details.' });
+          } catch {
+            await interaction.reply({ content: '❌ Failed to close week. Check mod log for details.', ephemeral: true });
+          }
         }
         return;
       }

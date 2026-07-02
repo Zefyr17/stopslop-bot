@@ -168,6 +168,10 @@ export class ModLogService {
           .setLabel('Approve')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
+          .setCustomId(`flag_rank_${data.postId}`)
+          .setLabel('Rank')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
           .setCustomId(`flag_reject_${data.postId}`)
           .setLabel('Reject')
           .setStyle(ButtonStyle.Danger)

@@ -74,7 +74,7 @@ export class SpamPenaltyService {
       });
 
       const shortlisted = await prisma.post.count({
-        where: { authorId: discordUserId, monitoredChannelId, weekId: week.id, status: PostStatus.SHORTLISTED },
+        where: { authorId: discordUserId, monitoredChannelId, weekId: week.id, status: { in: [PostStatus.SHORTLISTED, 'RANKED' as PostStatus] } },
       });
 
       if (currentLimit === 0) {
@@ -120,7 +120,7 @@ export class SpamPenaltyService {
 
     const allShortlisted = await prisma.post.groupBy({
       by: ['authorId', 'weekId'],
-      where: { authorId: { in: userIds }, monitoredChannelId, weekId: { in: weekIds }, status: PostStatus.SHORTLISTED },
+      where: { authorId: { in: userIds }, monitoredChannelId, weekId: { in: weekIds }, status: { in: [PostStatus.SHORTLISTED, 'RANKED' as PostStatus] } },
       _count: { id: true },
     });
 

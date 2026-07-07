@@ -251,14 +251,30 @@ export class SpamPenaltyService {
       distinct: ['authorId'],
     });
 
-    for (const { authorId } of authorRows) {
-      const details = await this.getPostLimitDetails(authorId, guildId, monitoredChannelId, defaultLimit);
-      if (details.limit === 0) {
-        const existing = await spamCooldownService.getActiveCooldown(authorId, guildId, monitoredChannelId);
-        if (!existing) {
-          await spamCooldownService.setCooldown(authorId, guildId, monitoredChannelId, 'system', 7);
-          console.log(`[SpamPenalty] Auto-cooldown set for user ${authorId} in channel ${monitoredChannelId} (limit=0)`);
-        }
+    if (authorRows.length === 0) return;
+
+    const userIds = authorRows.map(r => r.authorId);
+
+    // Single batched query for all users instead of N×M individual queries
+    const limitsMap = await this.getBulkPostLimits(userIds, guildId, monitoredChannelId, defaultLimit);
+
+    // Fetch all existing active cooldowns for this channel in one query
+    const existingCooldowns = await prisma.spamCooldown.findMany({
+      where: {
+        oderId: { in: userIds },
+        guildId,
+        monitoredChannelId,
+        expiresAt: { gt: new Date() },
+      },
+      select: { oderId: true },
+    });
+    const usersWithCooldown = new Set(existingCooldowns.map(c => c.oderId));
+
+    for (const userId of userIds) {
+      const limit = limitsMap.get(userId) ?? defaultLimit;
+      if (limit === 0 && !usersWithCooldown.has(userId)) {
+        await spamCooldownService.setCooldown(userId, guildId, monitoredChannelId, 'system', 7);
+        console.log(`[SpamPenalty] Auto-cooldown set for user ${userId} in channel ${monitoredChannelId} (limit=0)`);
       }
     }
   }

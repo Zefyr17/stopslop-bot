@@ -279,6 +279,18 @@ export const commands = [
         .setDescription('Show raffle tickets leaderboard')),
 
   new SlashCommandBuilder()
+    .setName('slot')
+    .setDescription('Check post slot status')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('check')
+        .setDescription('Check post slots and penalties for a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('User to check')
+            .setRequired(true))),
+
+  new SlashCommandBuilder()
     .setName('spam')
     .setDescription('Manage spam penalties')
     .addSubcommand(subcommand =>

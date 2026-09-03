@@ -2734,7 +2734,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
       }
     }
 
-    if (commandName === 'spam') {
+    if (commandName === 'slot' || commandName === 'spam') {
       const subcommand = interaction.options.getSubcommand();
 
       if (subcommand === 'check') {

@@ -446,11 +446,15 @@ bot.on(Events.MessageCreate, async (message) => {
 
     await postService.updateReviewMessageId(post.id, reviewMessage.id);
 
-    // Notify author privately that submission doesn't guarantee points
+    // Notify author that submission doesn't guarantee points (auto-deletes after 10s)
     try {
-      await message.author.send('Please note that submitting your link does not guarantee community points. Points are awarded only to posts that meet the expected quality standards.');
+      const noteMsg = await message.reply({
+        content: `<@${message.author.id}> Please note that submitting your link does not guarantee community points. Points are awarded only to posts that meet the expected quality standards.`,
+        allowedMentions: { repliedUser: false },
+      });
+      setTimeout(() => noteMsg.delete().catch(() => {}), 10000);
     } catch {
-      // DMs may be closed — silently ignore
+      // Silently ignore
     }
 
     console.log(`Added voting buttons to message: ${reviewMessage.id}`);

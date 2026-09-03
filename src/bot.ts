@@ -346,8 +346,14 @@ bot.on(Events.MessageCreate, async (message) => {
       try {
         let replyText: string;
         if (postLimitCheck.limit === 0) {
-          const ticketMention = config.ticketChannelId ? ` Open a ticket in <#${config.ticketChannelId}> if you have questions.` : '';
-          replyText = `<@${message.author.id}> You have 0 post slots this week because your recent submissions did not meet the current shortlisting criteria. You have a **1-week cooldown** — once it expires your slots will reset to full.${ticketMention}`;
+          const cooldown = await spamCooldownService.getActiveCooldown(message.author.id, guildId, message.channelId);
+          const timerStr = cooldown
+            ? ` Till your cooldown expires: <t:${Math.floor(cooldown.expiresAt.getTime() / 1000)}:R>.`
+            : '';
+          const ticketMention = config.ticketChannelId
+            ? `\n\nIf you think there is a mistake you can open a ticket in <#${config.ticketChannelId}> and ask about your issue.`
+            : '';
+          replyText = `<@${message.author.id}> You have 0 post slots this week because your recent submissions did not meet the current shortlisting criteria. You have a **1-week cooldown** — once it expires your slots will reset to full.${timerStr}${ticketMention}`;
         } else {
           replyText = `<@${message.author.id}> You have reached your weekly post limit (**${postLimitCheck.currentCount}/${postLimitCheck.limit}**). Your message has been removed.`;
           if (postLimitCheck.penaltyBalance > 0) {
@@ -439,6 +445,13 @@ bot.on(Events.MessageCreate, async (message) => {
     });
 
     await postService.updateReviewMessageId(post.id, reviewMessage.id);
+
+    // Notify author privately that submission doesn't guarantee points
+    try {
+      await message.author.send('Please note that submitting your link does not guarantee community points. Points are awarded only to posts that meet the expected quality standards.');
+    } catch {
+      // DMs may be closed — silently ignore
+    }
 
     console.log(`Added voting buttons to message: ${reviewMessage.id}`);
   } catch (error) {

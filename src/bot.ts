@@ -449,7 +449,7 @@ bot.on(Events.MessageCreate, async (message) => {
     // Notify author that submission doesn't guarantee points (auto-deletes after 10s)
     try {
       const noteMsg = await message.reply({
-        content: `<@${message.author.id}> Please note that submitting your link does not guarantee community points. Points are awarded only to posts that meet the expected quality standards.`,
+        content: `<@${message.author.id}> Please note that submitting your link does not guarantee Community Points. Points are awarded only to posts that meet the expected quality standards.`,
         allowedMentions: { repliedUser: false },
       });
       setTimeout(() => noteMsg.delete().catch(() => {}), 10000);

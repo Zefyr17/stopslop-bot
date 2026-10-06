@@ -1305,6 +1305,27 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         return;
       }
 
+      if (subcommand === 'set-announcement-channel') {
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        const userRoleIds = Array.from(member.roles.cache.keys());
+        const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+        if (!isAdmin) {
+          await interaction.reply({ content: '❌ Only admins can set the announcement channel.', ephemeral: true });
+          return;
+        }
+        const channel = interaction.options.getChannel('channel', true);
+        if (channel?.type !== ChannelType.GuildText) {
+          await interaction.reply({ content: '❌ Channel must be a text channel.', ephemeral: true });
+          return;
+        }
+        await prisma.guildConfig.update({
+          where: { guildId },
+          data: { announcementChannelId: channel.id },
+        });
+        await interaction.reply({ content: `✅ Announcement channel set to <#${channel.id}>`, ephemeral: true });
+        return;
+      }
+
       if (subcommand === 'set-admin-roles') {
         const role1 = interaction.options.getRole('role1', true);
         const role2 = interaction.options.getRole('role2', false);
@@ -2053,14 +2074,30 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
       if (subcommand === 'start') {
         try {
+          await interaction.deferReply({ ephemeral: true });
+
           const monitoredChannel = interaction.options.getChannel('monitored', true);
           const monitoredChannelId = monitoredChannel.id;
 
           const channelInfo = ` for <#${monitoredChannelId}>`;
           const channelInfoLog = ` for channel <#${monitoredChannelId}>`;
 
+          // Determine which voter group is active this week (alternate from last closed week)
+          const lastClosedWeek = await prisma.week.findFirst({
+            where: { status: WeekStatus.CLOSED, monitoredChannelId },
+            orderBy: { endDate: 'desc' },
+            select: { activeVoterGroup: true },
+          });
+          const activeVoterGroup = lastClosedWeek?.activeVoterGroup === 'A' ? 'B' : 'A';
+
           // Start new voting period
           const newWeek = await weekService.startNewWeek(monitoredChannelId);
+
+          // Save active voter group on the new week
+          await prisma.week.update({
+            where: { id: newWeek.id },
+            data: { activeVoterGroup },
+          });
 
           // Format dates for logging
           const startDate = newWeek.startDate.toISOString().split('T')[0];
@@ -2076,9 +2113,31 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             details: `New voting period started${channelInfoLog} by <@${interaction.user.id}>. Bot is now accepting posts.`,
           });
 
-          await interaction.reply({
-            content: `✅ **New voting period started!**${channelInfo}\n\n**Started:** ${startDate}\n\n🎉 **Bot is now accepting posts${channelInfo}!**\nUsers can submit links and vote on them.`,
-            ephemeral: true,
+          // Announce active voter group in announcement channel
+          const config = await guildConfigService.getConfig(guildId);
+          const announcementChannelId = config?.announcementChannelId;
+          if (announcementChannelId) {
+            const groupMembers = activeVoterGroup === 'A'
+              ? ((config as any).voterGroupA as string[] || [])
+              : ((config as any).voterGroupB as string[] || []);
+
+            if (groupMembers.length > 0) {
+              try {
+                const announceCh = await interaction.guild!.channels.fetch(announcementChannelId);
+                if (announceCh?.isTextBased()) {
+                  const mentions = groupMembers.map(id => `<@${id}>`).join(' ');
+                  await (announceCh as TextChannel).send(
+                    `${mentions}\n\nA new voting week has started! It's **Group ${activeVoterGroup}'s** turn to vote this week. Please review and vote on the submitted content in <#${monitoredChannelId}>.`
+                  );
+                }
+              } catch (err) {
+                console.error('Failed to send voter group announcement:', err);
+              }
+            }
+          }
+
+          await interaction.editReply({
+            content: `✅ **New voting period started!**${channelInfo}\n\n**Started:** ${startDate}\n🗳️ **Active voter group: ${activeVoterGroup}**\n\n🎉 **Bot is now accepting posts${channelInfo}!**\nUsers can submit links and vote on them.`,
           });
         } catch (error) {
           console.error('Error starting week:', error);
@@ -2087,7 +2146,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
             error: 'Failed to start week',
             details: errorMessage,
           });
-          await interaction.reply({ content: `❌ Failed to start voting period: ${errorMessage}`, ephemeral: true });
+          try {
+            await interaction.editReply({ content: `❌ Failed to start voting period: ${errorMessage}` });
+          } catch {
+            await interaction.reply({ content: `❌ Failed to start voting period: ${errorMessage}`, ephemeral: true });
+          }
         }
         return;
       }
@@ -3561,6 +3624,72 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
         await interaction.editReply({ content: '❌ Failed to parse text.' });
       }
       return;
+    }
+
+    if (commandName === 'voter-group') {
+      const member = await interaction.guild!.members.fetch(interaction.user.id);
+      const userRoleIds = Array.from(member.roles.cache.keys());
+      const isAdmin = await guildConfigService.isUserAdmin(guildId, userRoleIds);
+      if (!isAdmin) {
+        await interaction.reply({ content: '❌ Only admins can manage voter groups.', ephemeral: true });
+        return;
+      }
+
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'set-a' || subcommand === 'set-b') {
+        const userIds: string[] = [];
+        for (let i = 1; i <= 10; i++) {
+          const u = interaction.options.getUser(`user${i}`, false);
+          if (u) userIds.push(u.id);
+        }
+        const field = subcommand === 'set-a' ? 'voterGroupA' : 'voterGroupB';
+        const label = subcommand === 'set-a' ? 'A' : 'B';
+        await prisma.guildConfig.update({
+          where: { guildId },
+          data: { [field]: userIds },
+        });
+        const mentions = userIds.map(id => `<@${id}>`).join(', ');
+        await interaction.reply({ content: `✅ Voter Group ${label} set (${userIds.length} members): ${mentions}`, ephemeral: true });
+        return;
+      }
+
+      if (subcommand === 'show') {
+        const config = await guildConfigService.getConfig(guildId);
+        if (!config) {
+          await interaction.reply({ content: 'Configuration not found.', ephemeral: true });
+          return;
+        }
+
+        // Find the last closed week to determine which group is next
+        const lastWeek = await prisma.week.findFirst({
+          where: { status: WeekStatus.CLOSED },
+          orderBy: { endDate: 'desc' },
+          select: { activeVoterGroup: true },
+        });
+        const activeWeek = await prisma.week.findFirst({
+          where: { status: WeekStatus.ACTIVE },
+          orderBy: { createdAt: 'desc' },
+          select: { activeVoterGroup: true },
+        });
+
+        const currentGroup = activeWeek?.activeVoterGroup || (lastWeek?.activeVoterGroup === 'A' ? 'B' : 'A');
+
+        const groupA = (config as any).voterGroupA as string[] || [];
+        const groupB = (config as any).voterGroupB as string[] || [];
+
+        const embed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('Voter Groups')
+          .addFields(
+            { name: `Group A ${currentGroup === 'A' ? '✅ Active this week' : '💤 Resting this week'}`, value: groupA.length > 0 ? groupA.map(id => `<@${id}>`).join(', ') : '*Not set*', inline: false },
+            { name: `Group B ${currentGroup === 'B' ? '✅ Active this week' : '💤 Resting this week'}`, value: groupB.length > 0 ? groupB.map(id => `<@${id}>`).join(', ') : '*Not set*', inline: false },
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
     }
   } catch (error) {
     console.error(`Error handling command ${commandName}:`, error);

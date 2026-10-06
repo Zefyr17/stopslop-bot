@@ -47,6 +47,7 @@ model Week {
   endDate            DateTime
   status             WeekStatus @default(ACTIVE)
   rankingOpen        Boolean    @default(false)
+  activeVoterGroup   String?
   posts              Post[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
@@ -101,21 +102,24 @@ model Rating {
 }
 
 model GuildConfig {
-  id                   String        @id @default(cuid())
-  guildId              String        @unique
-  channelPairs         ChannelPair[]
-  modLogChannelId      String?
-  voterRoleIds         String[]      @default([])
-  judgeRoleIds         String[]      @default([])
-  adminRoleIds         String[]      @default([])
-  unlimitedRoleIds     String[]      @default([])
-  upvoteThreshold      Int           @default(5)
-  downvoteThreshold    Int           @default(5)
-  defaultPostLimit     Int           @default(3)
-  raffleRoleId         String?
-  ticketChannelId      String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id                     String        @id @default(cuid())
+  guildId                String        @unique
+  channelPairs           ChannelPair[]
+  modLogChannelId        String?
+  voterRoleIds           String[]      @default([])
+  judgeRoleIds           String[]      @default([])
+  adminRoleIds           String[]      @default([])
+  unlimitedRoleIds       String[]      @default([])
+  upvoteThreshold        Int           @default(5)
+  downvoteThreshold      Int           @default(5)
+  defaultPostLimit       Int           @default(3)
+  raffleRoleId           String?
+  ticketChannelId        String?
+  announcementChannelId  String?
+  voterGroupA            String[]      @default([])
+  voterGroupB            String[]      @default([])
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 }
 
 model ChannelPair {

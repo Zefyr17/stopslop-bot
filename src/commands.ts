@@ -60,6 +60,14 @@ export const commands = [
             .setRequired(true)))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('set-announcement-channel')
+        .setDescription('Set the channel where voter group announcements are posted on /week start (Admin only)')
+        .addChannelOption(option =>
+          option.setName('channel')
+            .setDescription('Channel for voter group announcements')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('reset')
         .setDescription('Reset server configuration to defaults (Admin only)')),
 
@@ -454,6 +462,42 @@ export const commands = [
       option.setName('text')
         .setDescription('Paste the full announcement text with @usernames and XP amounts')
         .setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('voter-group')
+    .setDescription('Manage rotating voter groups for weekly voting')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set-a')
+        .setDescription('Set members of voter Group A (Admin only)')
+        .addUserOption(o => o.setName('user1').setDescription('Member 1').setRequired(true))
+        .addUserOption(o => o.setName('user2').setDescription('Member 2').setRequired(false))
+        .addUserOption(o => o.setName('user3').setDescription('Member 3').setRequired(false))
+        .addUserOption(o => o.setName('user4').setDescription('Member 4').setRequired(false))
+        .addUserOption(o => o.setName('user5').setDescription('Member 5').setRequired(false))
+        .addUserOption(o => o.setName('user6').setDescription('Member 6').setRequired(false))
+        .addUserOption(o => o.setName('user7').setDescription('Member 7').setRequired(false))
+        .addUserOption(o => o.setName('user8').setDescription('Member 8').setRequired(false))
+        .addUserOption(o => o.setName('user9').setDescription('Member 9').setRequired(false))
+        .addUserOption(o => o.setName('user10').setDescription('Member 10').setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set-b')
+        .setDescription('Set members of voter Group B (Admin only)')
+        .addUserOption(o => o.setName('user1').setDescription('Member 1').setRequired(true))
+        .addUserOption(o => o.setName('user2').setDescription('Member 2').setRequired(false))
+        .addUserOption(o => o.setName('user3').setDescription('Member 3').setRequired(false))
+        .addUserOption(o => o.setName('user4').setDescription('Member 4').setRequired(false))
+        .addUserOption(o => o.setName('user5').setDescription('Member 5').setRequired(false))
+        .addUserOption(o => o.setName('user6').setDescription('Member 6').setRequired(false))
+        .addUserOption(o => o.setName('user7').setDescription('Member 7').setRequired(false))
+        .addUserOption(o => o.setName('user8').setDescription('Member 8').setRequired(false))
+        .addUserOption(o => o.setName('user9').setDescription('Member 9').setRequired(false))
+        .addUserOption(o => o.setName('user10').setDescription('Member 10').setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('show')
+        .setDescription('Show current voter groups and which group is active this week')),
 ].map(command => command.toJSON());
 
 export async function registerCommands(clientId: string, token: string) {

@@ -2755,18 +2755,52 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
 
           await interaction.deferReply();
 
-          const holders = await raffleService.getTicketHolders(guildId);
+          const groupFilter = interaction.options.getString('group', false) ?? 'all';
+          const weeksFilter = interaction.options.getInteger('weeks', false) ?? null;
+
+          // Determine sinceDate from weeks filter
+          let sinceDate: Date | null | undefined = undefined;
+          let footerSince = '';
+          if (weeksFilter !== null) {
+            sinceDate = new Date();
+            sinceDate.setDate(sinceDate.getDate() - weeksFilter * 7);
+            footerSince = `Last ${weeksFilter} week${weeksFilter !== 1 ? 's' : ''}`;
+          } else {
+            const lastRaffle = await raffleService.getLastRaffle(guildId);
+            footerSince = lastRaffle
+              ? `Since: ${lastRaffle.drawnAt.toISOString().split('T')[0]}`
+              : 'Since: all time (no raffle drawn yet)';
+          }
+
+          // Determine group member filter
+          let filterUserIds: string[] | undefined = undefined;
+          let groupLabel = '';
+          if (groupFilter === 'A') {
+            filterUserIds = (config as any).voterGroupA as string[] || [];
+            groupLabel = ' — Group A';
+          } else if (groupFilter === 'B') {
+            filterUserIds = (config as any).voterGroupB as string[] || [];
+            groupLabel = ' — Group B';
+          }
+
+          if (filterUserIds && filterUserIds.length === 0) {
+            await interaction.editReply({ content: `❌ Group ${groupFilter} has no members set. Use \`/voter-group set-${groupFilter.toLowerCase()}\` first.` });
+            return;
+          }
+
+          const holders = await raffleService.getTicketHolders(guildId, sinceDate, filterUserIds);
 
           const embed = new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle('Successful Votes Leaderboard')
+            .setTitle(`Successful Votes Leaderboard${groupLabel}`)
+            .setFooter({ text: footerSince })
             .setTimestamp();
 
-          if (holders.length === 0) {
-            embed.setDescription('No successful votes yet. Vote correctly on decided posts to appear here!');
+          if (holders.length === 0 || holders.every(h => h.tickets === 0)) {
+            embed.setDescription('No successful votes yet for this period.');
           } else {
             const lines: string[] = [];
-            const topHolders = holders.slice(0, 10);
+            const topHolders = holders.slice(0, 15);
             for (let i = 0; i < topHolders.length; i++) {
               const holder = topHolders[i];
               const accuracyStr = holder.accuracy.toFixed(0);
@@ -2775,13 +2809,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
               );
             }
             embed.setDescription(lines.join('\n'));
-          }
-
-          const lastRaffle = await raffleService.getLastRaffle(guildId);
-          if (lastRaffle) {
-            embed.setFooter({ text: `Since: ${lastRaffle.drawnAt.toISOString().split('T')[0]}` });
-          } else {
-            embed.setFooter({ text: 'Since: all time (no raffle drawn yet)' });
           }
 
           await interaction.editReply({ embeds: [embed] });

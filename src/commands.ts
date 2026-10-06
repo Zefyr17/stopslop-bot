@@ -284,7 +284,22 @@ export const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('stats')
-        .setDescription('Show raffle tickets leaderboard')),
+        .setDescription('Show raffle tickets leaderboard')
+        .addStringOption(option =>
+          option.setName('group')
+            .setDescription('Filter by voter group (default: all)')
+            .setRequired(false)
+            .addChoices(
+              { name: 'All', value: 'all' },
+              { name: 'Group A', value: 'A' },
+              { name: 'Group B', value: 'B' },
+            ))
+        .addIntegerOption(option =>
+          option.setName('weeks')
+            .setDescription('Number of past weeks to include (default: since last raffle)')
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(52))),
 
   new SlashCommandBuilder()
     .setName('slot')

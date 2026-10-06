@@ -25,12 +25,12 @@ export class RaffleService {
   }
 
   /**
-   * Count correct votes (successful votes) per user since the last raffle.
-   * Scoped to this guild's monitored channels.
+   * Count correct votes (successful votes) per user.
+   * @param sinceDate  only count votes after this date (overrides last-raffle cutoff when provided)
+   * @param filterUserIds  restrict results to these Discord user IDs (voter group filter)
    */
-  async getTicketHolders(guildId: string): Promise<TicketHolder[]> {
-    const lastRaffle = await this.getLastRaffle(guildId);
-    const cutoffDate = lastRaffle?.drawnAt ?? null;
+  async getTicketHolders(guildId: string, sinceDate?: Date | null, filterUserIds?: string[]): Promise<TicketHolder[]> {
+    const cutoffDate = sinceDate !== undefined ? sinceDate : (await this.getLastRaffle(guildId))?.drawnAt ?? null;
 
     const channelPairs = await prisma.channelPair.findMany({
       where: { guildConfig: { guildId } },
@@ -48,6 +48,9 @@ export class RaffleService {
     };
     if (cutoffDate) {
       whereClause.createdAt = { gt: cutoffDate };
+    }
+    if (filterUserIds && filterUserIds.length > 0) {
+      whereClause.user = { discordId: { in: filterUserIds } };
     }
 
     const votes = await prisma.vote.findMany({
@@ -73,6 +76,13 @@ export class RaffleService {
       if (isCorrect) stats.correct++;
     }
 
+    // If filterUserIds given, include users with 0 votes too (so group members always appear)
+    if (filterUserIds && filterUserIds.length > 0) {
+      for (const id of filterUserIds) {
+        if (!userMap.has(id)) userMap.set(id, { correct: 0, total: 0 });
+      }
+    }
+
     return Array.from(userMap.entries())
       .map(([oderId, stats]) => ({
         oderId,
@@ -80,7 +90,6 @@ export class RaffleService {
         totalVotes: stats.total,
         accuracy: stats.total > 0 ? (stats.correct / stats.total) * 100 : 0,
       }))
-      .filter(h => h.tickets > 0)
       .sort((a, b) => b.tickets - a.tickets || b.accuracy - a.accuracy);
   }
 

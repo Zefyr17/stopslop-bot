@@ -439,7 +439,7 @@ bot.on(Events.MessageCreate, async (message) => {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(upvoteButton, downvoteButton);
 
     const reviewMessage = await message.reply({
-      content: `Is this post high-quality and aligned well with GenLayer? (Singularity role only)\nBy <@${message.author.id}>`,
+      content: `Is this post by <@${message.author.id}> high-quality and aligned well with GenLayer? (Singularity role only)`,
       components: [row],
       allowedMentions: { repliedUser: false },
     });

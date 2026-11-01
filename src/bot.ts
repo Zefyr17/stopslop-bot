@@ -2103,6 +2103,21 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction, guil
           const startDate = newWeek.startDate.toISOString().split('T')[0];
           const endDate = newWeek.endDate.toISOString().split('T')[0];
 
+          // Send a visual divider to mod-log so it's clear where the new week starts
+          try {
+            const modConfig = await guildConfigService.getConfig(guildId);
+            if (modConfig?.modLogChannelId) {
+              const modLogCh = await interaction.guild!.channels.fetch(modConfig.modLogChannelId);
+              if (modLogCh?.isTextBased()) {
+                await (modLogCh as TextChannel).send(
+                  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📅 **NEW WEEK STARTED** — <#${monitoredChannelId}>\nPosts above this line = previous week · Posts below = new week\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+                );
+              }
+            }
+          } catch (err) {
+            console.error('Failed to send mod-log divider:', err);
+          }
+
           // Log to mod_log
           await modLogService.log(guildId, ModLogEventType.WEEK_STARTED, {
             weekId: newWeek.id,

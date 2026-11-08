@@ -1055,14 +1055,6 @@ async function handleRateButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
-    // Check if the week is closed
-    const week = await weekService.getWeekById(post.weekId);
-    if (week && week.status === WeekStatus.CLOSED) {
-      await interaction.followUp({ content: '❌ Cannot rate posts from a closed week.', ephemeral: true });
-      return;
-    }
-
-
     if (post.status !== PostStatus.SHORTLISTED) {
       await interaction.followUp({ content: 'Only shortlisted posts can be rated.', ephemeral: true });
       return;

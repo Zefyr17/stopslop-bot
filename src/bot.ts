@@ -610,12 +610,6 @@ async function handleVoteButton(interaction: ButtonInteraction, guildId: string)
       return;
     }
 
-    const week = await weekService.getWeekById(post.weekId);
-    if (week?.status === WeekStatus.CLOSED) {
-      await interaction.followUp({ content: '❌ Cannot vote on posts from a closed week.', ephemeral: true });
-      return;
-    }
-
     if (post.status !== PostStatus.PENDING) {
       await interaction.followUp({ content: 'This post has already been decided.', ephemeral: true });
       return;
